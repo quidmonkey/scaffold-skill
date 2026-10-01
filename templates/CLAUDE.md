@@ -149,6 +149,8 @@ Project docs live in `docs/`:
 
 `docs/specs/` does not exist yet. Create it — and only then — when the design is large enough to split (see below); a new project has nothing to put in it.
 
+`working/` is a gitignored scratch directory for local development. Never mention or reference it in `docs/` or in code comments; it isn't part of the project.
+
 ### Splitting design.md into per-flow specs
 
 While the project is small, `design.md` holds everything. Once it passes ~400 lines or covers three or more flows, split it: create `docs/specs/` and give each flow a `docs/specs/<flow>.md` (kebab-case, copied from `docs/templates/spec.md`) with a `docs/specs/<flow>-diagram.mmd` (copied from `docs/templates/diagram.mmd`) beside it.

@@ -1,5 +1,5 @@
 ---
-name: python-gcp-agentic-project-skill
+name: scaffold
 version: 3.1.0
 description: |
   Create a new Python project using uv with pre-commit, ruff, ty, bandit, and pytest
@@ -9,7 +9,7 @@ description: |
   skill's tooling on top. Generates CLAUDE.md and .claude/settings.json to enforce pre-commit
   checks during agentic development.
   Use when user says "create python project", "new python project", "init python project",
-  "scaffold python project", or invokes /python-gcp-project.
+  "scaffold python project", or invokes /scaffold.
 allowed-tools:
   - Bash
   - Read
@@ -217,7 +217,7 @@ After editing, grep for the flag or label to confirm the edit landed. If the exp
 
 Do not create `docs/specs/`. It comes into existence when the design outgrows one file; `CLAUDE.md` carries the rule for creating it then, and `docs/templates/` carries the spec skeleton and diagram starting shape.
 
-`working/` holds dirty files needed during development but never committed. The `.gitignore` template excludes it.
+`working/` holds dirty files needed during development but never committed. The `.gitignore` template excludes it. The generated `CLAUDE.md` forbids mentioning `working/` in `docs/` or in code comments.
 
 ## Step 5: Install project skills
 

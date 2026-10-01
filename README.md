@@ -212,7 +212,7 @@ create a new python project called my-api
 Or invoke directly:
 
 ```
-/python-gcp-agentic-project-skill my-api
+/scaffold my-api
 ```
 
 Claude will ask whether you want a single package or monorepo layout, then scaffold the entire project.

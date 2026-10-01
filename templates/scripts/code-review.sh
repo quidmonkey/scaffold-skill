@@ -9,7 +9,7 @@
 # Commits are reviewed once: the last passing commit per branch is recorded in
 # .git/code-review-ledger (shared by every worktree, written under a lock), and
 # later pushes review only new commits since.
-# The full report is written to working/code-review-report.md (gitignored).
+# The full report is written to $report (gitignored).
 #
 # fix_enabled defaults to true: a failed review hands its REQUIRED findings
 # (both passes combined) to a single fix agent that fixes or disputes each one,
@@ -321,7 +321,7 @@ show_pass() {
 }
 
 # The most recent review's or verification's open findings, and the fixer's
-# latest summary. Stable files under working/ (gitignored) rather than temp
+# latest summary. Stable gitignored files rather than temp
 # files: the agents read them, and a path inside the project needs no extra
 # directory access in a headless run.
 findings_file="working/code-review-findings.md"

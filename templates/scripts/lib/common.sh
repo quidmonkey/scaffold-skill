@@ -14,7 +14,7 @@ ship_base=develop
 # uncommitted (fix_enabled never commits or pushes on its own), but ship.sh
 # looks for this file right after a blocked `git push` to know whether it's
 # looking at an unfixable failure or a fix sitting in the working tree ready
-# to be committed. Gitignored (lives under working/), like the report.
+# to be committed. Gitignored, like the report.
 autofix_marker="working/autofix-pending.marker"
 
 # Every key .codereviewrc understands. An override (--set or CR_<KEY>) naming
