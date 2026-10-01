@@ -235,6 +235,8 @@ validate_config() {
     check_enum review_agent claude custom
     check_enum fix_agent claude custom
     check_enum review_effort low medium high xhigh max default
+    check_enum review_spec_effort low medium high xhigh max default
+    check_enum fix_effort low medium high xhigh max default
     check_enum enabled true false
     check_enum fix_enabled true false
     check_enum pr_self_approve true false
@@ -452,8 +454,8 @@ setting_line() {
 print_block() {
     local key shown
     shown="ship_stage pr_host pr_merge_method pr_self_approve pr_reviewers review_agent
-review_model review_effort review_spec_model fix_enabled fix_model
-fix_max_iterations ship_fix_retries agent_timeout pr_poll_interval pr_poll_timeout"
+review_model review_effort review_spec_model review_spec_effort fix_enabled
+fix_model fix_effort fix_max_iterations ship_fix_retries agent_timeout pr_poll_interval pr_poll_timeout"
     stage_at_least verify_deploy \
         && shown="$shown deploy_pipeline deploy_provider deploy_project deploy_region deploy_name
 deploy_match deploy_proxy deploy_smoke deploy_run_grace deploy_poll_timeout deploy_smoke_timeout"

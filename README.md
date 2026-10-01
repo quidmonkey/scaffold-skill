@@ -130,16 +130,18 @@ Both agents are configurable via `.codereviewrc`:
 | `review_model` | model alias or full ID, for pass 1 | `opus` |
 | `review_effort` | `low`, `medium`, `high`, `xhigh`, `max`, `default`, for pass 1 | `high` |
 | `review_spec_model` | model alias or full ID, for pass 2 and fix verification | `sonnet` |
+| `review_spec_effort` | same values as `review_effort`, for pass 2 and fix verification | `medium` |
 | `enabled` | `true` / `false` | `true` |
 | `command` | shell command for `review_agent=custom`; receives the prompt on stdin | — |
 | `fix_enabled` | `true` / `false` | `true` |
 | `fix_agent` | `claude`, `custom` | `claude` |
 | `fix_model` | model alias or full ID | `sonnet` |
+| `fix_effort` | same values as `review_effort` | `medium` |
 | `fix_max_iterations` | positive integer | `2` |
 | `fix_command` | shell command for `fix_agent=custom`; receives the fix prompt on stdin | — |
 | `agent_timeout` | seconds any one agent call may run; a timed-out review pass fails | `900` |
 
-The contract is agent-agnostic: whatever runs must print its review to stdout and end with `VERDICT: PASS` or `VERDICT: FAIL`. Models are set explicitly rather than inherited from the `claude` CLI default. The aliases still move to each new release, so set a full model ID (for example `claude-opus-5-5`) to pin one exactly. One blocked push with auto-fix on runs 2 review passes plus up to 2 fix and 2 verification passes. Pass 1 gets Opus at high effort because finding bugs nobody has reported is the hardest job in the gate. A missed bug goes unnoticed, and each false REQUIRED costs a fix and a verification round. Pass 2, verification, and the fix pass work from a stated doc or finding and run on Sonnet. A misconfigured file (unknown agent, `custom` with no command) blocks the push rather than silently disabling the gate.
+The contract is agent-agnostic: whatever runs must print its review to stdout and end with `VERDICT: PASS` or `VERDICT: FAIL`. Models are set explicitly rather than inherited from the `claude` CLI default. The aliases still move to each new release, so set a full model ID (for example `claude-opus-5-5`) to pin one exactly. One blocked push with auto-fix on runs 2 review passes plus up to 2 fix and 2 verification passes. Pass 1 gets Opus at high effort because finding bugs nobody has reported is the hardest job in the gate. A missed bug goes unnoticed, and each false REQUIRED costs a fix and a verification round. Pass 2, verification, and the fix pass work from a stated doc or finding and run on Sonnet at medium effort. Every call sets its effort explicitly: the CLI default changes between releases, a level doesn't mean the same amount of thinking on every model, and a fixer at low effort is more likely to call a fix done without running the checks. A misconfigured file (unknown agent, `custom` with no command) blocks the push rather than silently disabling the gate.
 
 Escape hatches: `SKIP_CODE_REVIEW=true git push` skips one push, `enabled=false` turns it off for the repo. If the agent CLI isn't installed at all, the hook warns and fails open so teammates without it aren't blocked.
 

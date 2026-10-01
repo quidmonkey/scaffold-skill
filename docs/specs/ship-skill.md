@@ -205,7 +205,7 @@ The config block records:
 - the worktree path and target branch (`develop`)
 - the stage
 - the PR host, merge method and reviewers
-- `review_model`, `review_effort`, `review_spec_model`, `fix_model` and `fix_max_iterations`
+- `review_model`, `review_effort`, `review_spec_model`, `review_spec_effort`, `fix_model`, `fix_effort` and `fix_max_iterations`
 - `agent_timeout` and the poll settings
 - the deploy settings, when the stage is `verify_deploy`
 - the authenticated account names

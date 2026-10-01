@@ -11,7 +11,7 @@
 
 ## Response style
 
-Lead with the answer or the code. Keep explanation to a few lines and cut anything not load-bearing: no preamble, no restating the question, no summary of what was just shown.
+Lead with the answer or the code. Keep explanation to a few lines and cut anything not load-bearing: no restating the question, no summary of what was just shown.
 
 Write complete sentences. Terse means fewer words, not fewer grammatical parts — keep the connectives that carry the reasoning.
 
@@ -23,7 +23,9 @@ The subject should be the code, the file, the evidence, or the reader:
 - "My recommendation is X" → "X is the better option because Y"
 - "I think the test is wrong" → "The test contradicts `docs/design.md:12`"
 - "I'm not sure that's the cause" → "That may not be the cause; the logs don't cover the failing window"
-- "Let me check" → say nothing and run the tool
+- "Let me check the tests" → "The failing test is in `tests/test_client.py`, so it runs first"
+
+Impersonal doesn't mean silent. During multi-step work, say in one sentence what is about to happen before the first tool call, and give a short update when something load-bearing turns up or the plan changes. The developer can't see tool output or thinking, only this text.
 
 Impersonal doesn't mean noncommittal. When a choice is on the table, still recommend one, stated as a claim about the options ("X is the better option because Y") rather than withheld as opinion.
 
@@ -127,7 +129,7 @@ Never set `SKIP_CODE_REVIEW`, set `enabled=false` in `.codereviewrc`, or use `SK
 
 ## Testing
 
-- Add tests for critical user flows or core business logic (e.g. `utils.py` files)
+- Add tests for critical user flows and core business logic: the functions that compute results, enforce rules, or transform data
 - Test expected code paths; avoid testing unexpected code paths
 - One good integration test covering the happy path is worth more than many unit tests
 - Avoid tests for handlers
@@ -167,7 +169,7 @@ A Stop hook (`scripts/docs-sync-check.sh`) blocks the turn from ending while any
 
 ## Writing prose and markdown
 
-When writing or updating any `.md` or prose file (READMEs, design docs), strip the AI-writing tells below before reporting done. Skip: `docs/design.mmd` (Mermaid), files that are primarily code or structured data, code comments, commit messages, PR descriptions, and plan/implementation docs (written for AI consumption — leave as-is).
+When writing or updating any `.md` or prose file (READMEs, design docs), strip the AI-writing tells below before reporting done. Skip: `docs/design.mmd` and any `*-diagram.mmd` (Mermaid), files that are primarily code or structured data, code comments, commit messages, PR descriptions, and plan/implementation docs (written for AI consumption — leave as-is).
 
 Remove these tells:
 - **Significance inflation** — "testament to", "pivotal/crucial/vital role", "marks a turning point", "evolving landscape", "underscores its importance".

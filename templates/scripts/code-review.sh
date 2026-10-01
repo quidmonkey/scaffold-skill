@@ -18,8 +18,9 @@
 # way — a passing working tree isn't a passing commit yet.
 #
 # Config: .codereviewrc (key=value) — review_agent, review_model,
-#         review_effort, review_spec_model, enabled, command, fix_enabled,
-#         fix_agent, fix_model, fix_command, agent_timeout. Any key can be
+#         review_effort, review_spec_model, review_spec_effort, enabled,
+#         command, fix_enabled, fix_agent, fix_model, fix_effort, fix_command,
+#         agent_timeout. Any key can be
 #         overridden for one push with CR_<KEY>, e.g. CR_REVIEW_MODEL=sonnet.
 # Skip:   SKIP_CODE_REVIEW=true git push, or enabled=false in .codereviewrc.
 # Base:   REVIEW_BASE_BRANCH replaces the default branch as a branch's
@@ -57,7 +58,10 @@ review_agent=$(rc_value review_agent)
 review_model=$(rc_value review_model)
 review_effort=$(rc_value review_effort)
 # Pass 2 and fix verification compare code against a stated doc or finding.
+# Every call gets an explicit effort: the CLI default moves between releases,
+# and effort levels don't mean the same amount of thinking across models.
 review_spec_model=$(rc_value review_spec_model)
+review_spec_effort=$(rc_value review_spec_effort)
 enabled=$(rc_value enabled)
 custom_cmd=$(rc_value command)
 
@@ -69,6 +73,9 @@ fix_agent=$(rc_value fix_agent)
 # The fixer works from findings that already name the file, the failure, and
 # the change needed, and a verification pass checks its work.
 fix_model=$(rc_value fix_model)
+# Not low: at low effort a fixer is more likely to report a fix done without
+# running the checks that exercise it.
+fix_effort=$(rc_value fix_effort)
 fix_cmd=$(rc_value fix_command)
 fix_max_iterations=$(rc_value fix_max_iterations)
 # Seconds any one agent call may run before it's killed and counted as failed.
@@ -105,13 +112,15 @@ case "$agent_timeout" in
         ;;
 esac
 
-case "$review_effort" in
-    low | medium | high | xhigh | max | default) ;;
-    *)
-        echo "ERROR: unknown review_effort '$review_effort' in $rc_file (low | medium | high | xhigh | max | default) — blocking push." >&2
-        exit 1
-        ;;
-esac
+for effort_key in review_effort review_spec_effort fix_effort; do
+    case "${!effort_key}" in
+        low | medium | high | xhigh | max | default) ;;
+        *)
+            echo "ERROR: unknown $effort_key '${!effort_key}' in $rc_file (low | medium | high | xhigh | max | default) — blocking push." >&2
+            exit 1
+            ;;
+    esac
+done
 
 # Validate the fix agent up front on the same fail-closed terms, but only when
 # auto-fix is on. A missing claude CLI is handled at fix time (fail-open).
@@ -147,9 +156,15 @@ if [ "$review_agent" = "claude" ] && ! command -v claude >/dev/null 2>&1; then
     exit 0
 fi
 
-# run_review_agent <prompt> <model> [effort] prints the review to stdout; the
-# review must end with "VERDICT: PASS" or "VERDICT: FAIL" as its final line. An
-# effort of "default" or none leaves the CLI's own. A custom command receives
+# effort_flags_for <effort> sets $effort_flags: --effort <effort>, or nothing
+# for "default", which leaves the CLI's own.
+effort_flags_for() {
+    effort_flags=()
+    [ -n "${1:-}" ] && [ "$1" != default ] && effort_flags=(--effort "$1")
+}
+
+# run_review_agent <prompt> <model> <effort> prints the review to stdout; the
+# review must end with "VERDICT: PASS" or "VERDICT: FAIL" as its final line. A custom command receives
 # the prompt on stdin and ignores model and effort.
 # git status is allowed: the verification prompt needs it to see untracked files
 # the fixer added, and a headless -p run has no prompt to approve it with.
@@ -165,8 +180,8 @@ fi
 claude_sandbox_flags=(--setting-sources user --permission-mode dontAsk)
 
 run_review_agent() {
-    local effort_flags=()
-    [ -n "${3:-}" ] && [ "$3" != default ] && effort_flags=(--effort "$3")
+    local effort_flags
+    effort_flags_for "$3"
     case "$review_agent" in
         claude)
             # ${a[@]+...}: bash 3.2 treats an empty array as unbound under set -u.
@@ -184,9 +199,11 @@ run_review_agent() {
 # Unlike the review agent it gets write tools, plus the checks it must not break;
 # a custom command receives the prompt on stdin instead.
 run_fix_agent() {
+    local effort_flags
+    effort_flags_for "$fix_effort"
     case "$fix_agent" in
         claude)
-            with_timeout "$agent_timeout" claude -p "$1" --model "$fix_model" "${claude_sandbox_flags[@]}" \
+            with_timeout "$agent_timeout" claude -p "$1" --model "$fix_model" ${effort_flags[@]+"${effort_flags[@]}"} "${claude_sandbox_flags[@]}" \
                 --tools "Read,Edit,Write,Grep,Glob,Bash" \
                 --allowed-tools "Read,Edit,Write,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git status:*),Bash(uv run pytest:*),Bash(uv run pre-commit:*),Bash(make run-check:*)" < /dev/null
             ;;
@@ -272,7 +289,7 @@ rm -f "$autofix_marker"
     echo "- Branch: \`$branch\`"
     echo "- Range: \`$range\`"
     echo "- Review agent: \`$review_agent\`"
-    [ "$review_agent" = "claude" ] && echo "- Models: pass 1 \`$review_model\` (effort \`$review_effort\`), pass 2 and verification \`$review_spec_model\`, fix \`$fix_model\`"
+    [ "$review_agent" = "claude" ] && echo "- Models: pass 1 \`$review_model\` (effort \`$review_effort\`), pass 2 and verification \`$review_spec_model\` (effort \`$review_spec_effort\`), fix \`$fix_model\` (effort \`$fix_effort\`)"
     [ "$fix_enabled" = "true" ] && echo "- Fix agent: \`$fix_agent\`"
     echo "- Date: $(date '+%Y-%m-%d %H:%M:%S')"
 } > "$report"
@@ -454,7 +471,7 @@ EOF
     echo "(this can take a few minutes)..."
     run_review_agent "$p1" "$review_model" "$review_effort" > "$o1" 2>&1 &
     pid1=$!
-    run_review_agent "$p2" "$review_spec_model" > "$o2" 2>&1 &
+    run_review_agent "$p2" "$review_spec_model" "$review_spec_effort" > "$o2" 2>&1 &
     pid2=$!
 
     s1=0
@@ -591,7 +608,7 @@ EOF
     out=$(mktemp)
     echo ""
     echo "Verifying the fixes$label (this can take a few minutes)..."
-    run_review_agent "$prompt" "$review_spec_model" > "$out" 2>&1 || status=$?
+    run_review_agent "$prompt" "$review_spec_model" "$review_spec_effort" > "$out" 2>&1 || status=$?
     finish_pass "Fix verification$label" "$out" "$status" && ok=1
     show_pass "Fix verification$label" "$out" "$ok"
     mv "$out" "$findings_file"

@@ -55,7 +55,7 @@ A commit gets decision trailers when it carries the outcome of a design intervie
 
 `decisions-hook.sh` reads `tool_input.file_path` and `session_id` from the hook payload. It runs once per file per session, tracked in `$TMPDIR/claude-decisions-<session_id>`. If the file has decisions, it returns:
 
-- `hookSpecificOutput.additionalContext`: up to 10 entries, and an instruction to treat them as binding, stop and ask the developer before reversing one, and record a confirmed reversal with a trailer.
+- `hookSpecificOutput.additionalContext`: up to 10 entries and a pointer to `CLAUDE.md` ("Decision history"). The context carries data only. The rule for a conflicting change (stop, ask, record a confirmed reversal with a trailer) lives in `CLAUDE.md`, because text arriving next to a tool result that tells the agent what to do can read as a prompt injection, and these entries come from commit messages.
 - `systemMessage`: one line for the developer, with the count, the newest decision and its commit.
 
 It sets no `permissionDecision`, so the normal permission flow is unchanged. The payload is parsed with `grep` and `sed`, like the other hook scripts, because `jq` isn't guaranteed. A path containing a double quote is skipped.

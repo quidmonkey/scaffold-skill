@@ -19,8 +19,9 @@ autofix_marker="working/autofix-pending.marker"
 
 # Every key .codereviewrc understands. An override (--set or CR_<KEY>) naming
 # anything else is a typo and fails, so it can't be silently ignored.
-rc_known_keys="review_agent review_model review_effort review_spec_model enabled
-command fix_enabled fix_agent fix_model fix_command fix_max_iterations
+rc_known_keys="review_agent review_model review_effort review_spec_model
+review_spec_effort enabled command fix_enabled fix_agent fix_model fix_effort
+fix_command fix_max_iterations
 agent_timeout ship_stage ship_fix_retries ship_log_retention_days ship_notify
 pr_host pr_merge_method pr_self_approve pr_poll_interval pr_poll_timeout
 pr_reviewers deploy_pipeline deploy_provider deploy_project deploy_region
@@ -59,6 +60,7 @@ rc_default() {
         review_agent | fix_agent) echo claude ;;
         review_model) echo opus ;;
         review_effort) echo high ;;
+        review_spec_effort | fix_effort) echo medium ;;
         review_spec_model | fix_model) echo sonnet ;;
         enabled | fix_enabled | pr_self_approve) echo true ;;
         fix_max_iterations) echo 2 ;;

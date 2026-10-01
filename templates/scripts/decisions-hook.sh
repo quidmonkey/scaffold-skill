@@ -52,7 +52,7 @@ context="Decisions recorded in commit trailers for $rel, newest first:
 
 $decisions
 
-Treat these as binding unless the developer says otherwise. If the change you are making reverses one or brings back an alternative it rejected, stop and ask the developer before continuing. If they confirm the reversal, record it with a Decision: trailer on the commit (README.md, \"Decision history\")."
+CLAUDE.md (\"Decision history\") covers what to do when a change conflicts with one."
 
 notice="$count prior decision(s) on $rel. Latest: $first ($sha). Run scripts/decisions.sh $rel for all."
 

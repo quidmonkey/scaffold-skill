@@ -46,12 +46,14 @@ review_agent=claude    # claude | custom
 review_model=opus      # model for pass 1, the general review (alias or full ID)
 review_effort=high     # pass 1 effort: low | medium | high | xhigh | max | default
 review_spec_model=sonnet # model for pass 2 (spec conformance) and fix verification
+review_spec_effort=medium # pass 2 and verification effort, same values
 enabled=true           # false disables the review
 # command=...          # for review_agent=custom: reads the prompt on stdin, prints the review
 
 fix_enabled=true       # false skips auto-fix and stops at the first failed review
 fix_agent=claude       # claude | custom
 fix_model=sonnet       # model for the fix pass
+fix_effort=medium      # fix pass effort, same values
 fix_max_iterations=2   # max fix -> verify rounds before giving up
 agent_timeout=900      # seconds any one agent call may run; a timeout fails the pass
 # fix_command=...      # for fix_agent=custom: reads the fix prompt on stdin, edits the tree
@@ -59,7 +61,7 @@ agent_timeout=900      # seconds any one agent call may run; a timeout fails the
 
 The ship settings are further down, under [Ship settings](#ship-settings).
 
-The models are set explicitly rather than inherited from the `claude` CLI default. Aliases like `opus` and `sonnet` still move to each new release; set a full model ID (for example `claude-opus-5-5`) to pin one exactly. Pass 1 gets the strongest model because finding unreported bugs is the hardest job in the gate. A missed bug goes unnoticed, and a false REQUIRED costs a fix and a verification round. Pass 2, verification, and the fix pass all work from a stated doc or finding, so they run on Sonnet. One blocked push with `fix_enabled=true` runs 2 review passes plus up to 2 fix and 2 verification passes.
+The models are set explicitly rather than inherited from the `claude` CLI default. Aliases like `opus` and `sonnet` still move to each new release; set a full model ID (for example `claude-opus-5-5`) to pin one exactly. Pass 1 gets the strongest model because finding unreported bugs is the hardest job in the gate. A missed bug goes unnoticed, and a false REQUIRED costs a fix and a verification round. Pass 2, verification, and the fix pass all work from a stated doc or finding, so they run on Sonnet at medium effort. Every call sets its effort explicitly, because the CLI default changes between releases and a level doesn't mean the same amount of thinking on every model. One blocked push with `fix_enabled=true` runs 2 review passes plus up to 2 fix and 2 verification passes.
 
 A custom review command must end its output with `VERDICT: PASS` or `VERDICT: FAIL` as the last non-empty line. Anything after the verdict is read as a failure, so nothing may follow it; surrounding `**` or backticks are tolerated. If the `claude` CLI isn't installed, the hook warns and lets the push through rather than blocking everyone without it; a misconfigured `.codereviewrc` (unknown agent, `custom` without its command) blocks the push instead.
 

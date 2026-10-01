@@ -26,6 +26,11 @@ review_effort=high
 # code against a stated doc or finding.
 review_spec_model=sonnet
 
+# Effort for pass 2 and fix verification. Same values as review_effort. Set
+# explicitly because the CLI default moves between releases, and a level
+# doesn't mean the same amount of thinking on every model.
+review_spec_effort=medium
+
 # Set to false to disable the pre-push code review entirely.
 enabled=true
 
@@ -58,6 +63,10 @@ fix_agent=claude
 # Model for the fix pass. The findings it works from already name the file, the
 # failure, and the change needed, and a verification pass checks its work.
 fix_model=sonnet
+
+# Effort for the fix pass. Same values as review_effort. At low, a fixer is more
+# likely to report a fix done without running the checks that exercise it.
+fix_effort=medium
 
 # Max fix -> verify rounds before the loop gives up (positive integer).
 fix_max_iterations=2
