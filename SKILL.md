@@ -235,20 +235,23 @@ the session the ADK, eval and deploy skills that the generated `CLAUDE.md` point
 ## Step 6: Init git, install pre-commit hooks, create `develop`
 
 ```bash
-git init -b main
+git init
+git symbolic-ref HEAD refs/heads/main
 uv run pre-commit install
 git add .
 git commit -m "Initial scaffold"
 git checkout -b develop
 ```
 
-`agents-cli create` doesn't initialize a repo, so `git init` starts a fresh one in both modes.
+**Fix generated code for this skill's hooks (`{{agents-cli}}`):** after `git add .` and before `git commit`, run `uv run pre-commit run --all-files` and fix what bandit, ruff and ty report, since a hook failure blocks the first commit. `--all-files` only sees tracked files, so it has to come after `git add .`. `fail_fast` reports one failing hook per run, so fix, `git add .` and re-run until it passes. Confirmed by dry run (agents-cli v1.8.0, `adk` template, both `cloud_run` and `agent_runtime`): bandit flags `B104` (bind to all interfaces) on `uvicorn.run(app, host="0.0.0.0", ...)` in `{{code-dir}}/fast_api_app.py`. A container has to bind every interface, so add `# nosec B104 - containers must bind all interfaces` to that line. That's a justified suppression, not a disabled rule. Other templates or versions may generate different code; fix whatever the hooks actually report rather than assuming this exact finding. The file fixers (`trailing-whitespace`, `end-of-file-fixer`) also rewrite several generated `.tf` and workflow files; that's expected.
 
-The commit runs the pre-commit hooks. A hook that rewrites files (for example `end-of-file-fixer`) fails the commit; `git add .` and commit again. If git has no user identity configured, stop and report that rather than setting one.
+`uv init` already created the repo (on the user's `init.defaultBranch`), and `agents-cli create` creates none, so `git init` is a no-op in the first case and starts a fresh repo in the second. `git symbolic-ref` points the still-unborn branch at `main` either way; `git init -b main` would be ignored on the existing repo.
+
+The commit runs the pre-commit hooks. A hook that rewrites files (for example `end-of-file-fixer`) fails the commit; `git add .` and commit again. `fail_fast` stops at the first failing hook, so each attempt can surface a different fixer; repeat until it passes. If the same non-fixer hook fails twice, fix its finding rather than retrying. If git has no user identity configured, stop and report that rather than setting one.
 
 `develop` is the branch `/ship` targets. The scaffold creates no remote, so the report gives the first-push commands that make `develop` the remote default too.
 
-In agents-cli mode, run `uv run pre-commit run --all-files` once here and fix what it finds before reporting done. Confirmed by dry run (agents-cli v1.8.0, `adk` template, `cloud_run`, Full depth): `trailing-whitespace` and `end-of-file-fixer` fix several generated `.tf` and workflow files (expected, first run only), and bandit flags `B104` (bind to all interfaces) on `uvicorn.run(app, host="0.0.0.0", ...)` in `{{code-dir}}/fast_api_app.py`. A container has to bind every interface, so add `# nosec B104 - containers must bind all interfaces` to that line. That's a justified suppression, not a disabled rule. Other templates or versions may generate different code; run the hooks and fix whatever they actually report rather than assuming these exact findings.
+In agents-cli mode, run `uv run pre-commit run --all-files` once more after the commit to confirm everything passes.
 
 `default_install_hook_types` in `.pre-commit-config.yaml` makes this install the pre-commit, pre-push, and prepare-commit-msg stages — pre-push carries the pytest and code-review hooks, prepare-commit-msg the decision-history listing.
 
