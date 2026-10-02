@@ -94,7 +94,7 @@ Then the developer confirms:
 
 5. Run `ship.sh --id <id> --expect-sha <sha> --expect-config <hash>` with the same overrides the plan had. The plan prints `<hash>`, a hash of every resolved setting. If HEAD has moved since the plan, any setting now resolves differently, or a check that passed in the plan now fails, refuse, and tell the developer to run `/ship` again. That way the developer never approves one config and gets another.
 6. Prune expired ship directories (see Retention).
-7. Create the snapshot branch `ship/<branch>-<sha7>` at HEAD. Seed its ledger entry in `.git/code-review-ledger` from the source branch's entry, so commits already reviewed aren't reviewed again. The write takes the ledger lock (see Concurrency).
+7. Create the snapshot branch `ship/<branch>-<sha7>` at HEAD, or `ship/<target>/<branch>-<sha7>` for a target other than `develop`, so one commit shipped to two targets gets two branches. Seed its ledger entry in `.git/code-review-ledger` from the source branch's entry, so commits already reviewed aren't reviewed again. The write takes the ledger lock (see Concurrency).
 8. Create the worktree at `../<repo>.ship-<id>` on the snapshot branch. Copy `.codereviewrc` into it, since the file is gitignored. Create `working/`. Run `uv sync`.
 9. Create `.git/ship/<id>/`. Write the config block to `status.json` and to the top of `ship.log`. Point `.git/ship/latest` at the new directory.
 10. With `--detach`: re-launch the rest under `nohup`, write `pid`, print the ship ID, and exit 0. Without it, continue in the foreground and stream `ship.log`.
@@ -103,7 +103,7 @@ The snapshot freezes the commit being shipped. Later commits on the developer's 
 
 ### 3. Review, fix, push (in the worktree)
 
-1. Run `git push -u origin ship/<branch>-<sha7>`. The existing pre-push hook runs the two-pass review in the worktree.
+1. Run `git push -u origin <snapshot>`. The existing pre-push hook runs the two-pass review in the worktree.
 2. If the push is blocked and the fix loop left `working/autofix-pending.marker`, commit the fix automatically with the existing message and push again, up to `ship_fix_retries` times. There's no confirmation prompt: the working tree belongs to the ship, and the re-push runs the full review again.
 3. If the push is blocked with REQUIRED findings still open, copy `working/code-review-report.md` into the ship directory, set the state to `failed`, and keep the worktree for inspection.
 
@@ -384,7 +384,7 @@ Decisions the build made where the draft was silent, and additions to it.
 - **Event stages.** Events use `kickoff`, `push` (which covers the review, since the review runs inside `git push`), `open_pr`, `merge`, `verify_deploy` and `finish`.
 - **Stop.** `ship_stop` collects the ship's descendant processes before sending TERM to `ship.sh`, since they can't be found from its PID once it exits, then sends TERM to them too (the push, the review agents, the smoke test). `ship.sh` records `stopped` from its TERM trap. If it hasn't within 15 seconds, the stop command kills it and records the state itself. With no ID and more than one ship running, it lists them and asks for one.
 - **Foreground ships** write `pid` too, so duplicate detection and `/ship stop` work for them.
-- **Re-shipping a failed commit.** The snapshot branch name is fixed by the commit, so a failed or stopped ship's kept branch would block a second ship of the same commit. Preflight warns that the new ship replaces them, and kickoff removes that worktree and branch (keeping its logs). A `ship/*` branch no ship owns fails preflight.
+- **Re-shipping a failed commit.** The snapshot branch name is fixed by the commit, so a failed or stopped ship's kept branch would block a second ship of the same commit. Preflight warns that the new ship replaces them, and kickoff removes that worktree and branch (keeping its logs). A `ship/*` branch no ship owns fails preflight. So does a snapshot branch already on `origin`: an earlier ship of the same commit pushed it, and pushing again is rejected if that ship committed an auto-fix. Preflight names the branch to delete once its PR is merged or closed.
 - **Ledger.** A passed or pruned ship's snapshot entry is removed from the ledger, so it doesn't grow by one line per ship. `ledger_set <branch> ""` deletes an entry.
 - **Detached runner.** The background process runs the worktree's own `scripts/ship.sh`, which nobody edits mid-run, falling back to the checkout's copy when the script isn't committed. It inherits the exported `CR_*` overrides, and reads everything else from `status.json`.
 - **Makefile variables** (`STAGE`, `SET`, `ID`, `SHA`, `CONFIG`, `DETACH`, `YES`) are read only when their `$(origin)` is `command line`, so a stray `YES=1` in the environment can't skip the terminal prompt. `SET` and `STAGE` reach `ship.sh` through the shell (`"$SET"`), so values with spaces and parentheses survive.

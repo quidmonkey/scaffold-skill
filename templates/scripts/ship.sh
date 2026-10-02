@@ -12,7 +12,8 @@
 #
 #   plan      read .codereviewrc and overrides, check the repo and every tool the
 #             stage needs, print the config block. Creates nothing.
-#   kickoff   freeze HEAD as ship/<branch>-<sha7>, seed its review-ledger entry,
+#   kickoff   freeze HEAD as ship/<branch>-<sha7> (ship/<target>/<branch>-<sha7>
+#             for a target other than develop), seed its review-ledger entry,
 #             create the worktree ../<repo>.ship-<id>, and .git/ship/<id>/.
 #   stages    in the worktree: push (the pre-push review runs there, and an
 #             auto-fix is committed and pushed again up to ship_fix_retries
@@ -417,7 +418,7 @@ ship_owning() {
 
 # preflight_feature — the developer's branch is shippable into ship_base.
 preflight_feature() {
-    local ahead origin_head hook
+    local ahead origin_head hook rc=0
     head_sha=$(git rev-parse HEAD 2>/dev/null)
     sha7=$(printf '%s' "$head_sha" | cut -c1-7)
 
@@ -451,7 +452,23 @@ preflight_feature() {
     else
         pf_fail "The pre-push hook isn't installed, so nothing would review the push. Run: uv run pre-commit install"
     fi
-    snapshot="ship/$branch-$sha7"
+    # Named for the target too, so shipping one commit to two targets doesn't
+    # reuse a branch whose PR (or auto-fix commit) belongs to the other.
+    if [ "$ship_base" = "$ship_dev" ]; then
+        snapshot="ship/$branch-$sha7"
+    else
+        snapshot="ship/$ship_base/$branch-$sha7"
+    fi
+    # An earlier ship of this commit left it on origin: pushing again is
+    # rejected if that ship committed an auto-fix, and a PR from it may be open.
+    if [ -n "$branch" ]; then
+        git ls-remote --exit-code --heads origin "refs/heads/$snapshot" >/dev/null 2>&1 || rc=$?
+        case "$rc" in
+            0) pf_fail "origin already has $snapshot from an earlier ship of this commit. Merge or close its PR, delete the branch (git push origin --delete $snapshot), then /ship again." ;;
+            2) ;;
+            *) pf_warn "Couldn't check origin for $snapshot (git ls-remote failed)." ;;
+        esac
+    fi
 }
 
 # preflight_prod — origin/develop has something to release into ship_base.
@@ -1072,7 +1089,7 @@ if [ -n "$planned_id" ]; then
     [ -z "$expect_sha" ] || [ "$expect_sha" = "$head_sha" ] \
         || die "$($prod && echo "origin/$ship_dev" || echo HEAD) moved since the plan (planned ${expect_sha:0:7}, now $sha7). Run /ship again to plan this commit."
     [ -z "$expect_config" ] || [ "$expect_config" = "$plan_hash" ] \
-        || die "a setting resolves differently than in the plan (config $expect_config, now $plan_hash). Run /ship again to see the new config."
+        || die "a setting, the target or the release notes changed since the plan (config $expect_config, now $plan_hash). Run /ship again to see the new config."
     [ ! -d "$(ship_root)/$ship_id" ] || die "ship $ship_id already exists. Run /ship again for a new plan."
 fi
 if [ -n "$pf_fails" ]; then

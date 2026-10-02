@@ -150,7 +150,7 @@ Run `/ship` in a Claude Code session, or `make ship` in a terminal. The ship run
 
 1. A read-only plan prints the resolved settings, each tagged with where its value came from, and checks everything the stage needs: CLI logins, reviewers, the deploy target. Nothing is created yet.
 2. You confirm. In a session that's the permission prompt on `make ship`. In a terminal it's `Proceed? [y/N]`. Denying leaves everything as it was.
-3. The commit at HEAD is frozen as the branch `ship/<branch>-<sha7>`, checked out in a new worktree at `../<repo>.ship-<id>`. Commits you make afterwards don't join this ship.
+3. The commit at HEAD is frozen as the branch `ship/<branch>-<sha7>` (`ship/<target>/<branch>-<sha7>` when the target isn't `develop`), checked out in a new worktree at `../<repo>.ship-<id>`. Commits you make afterwards don't join this ship.
 4. The worktree pushes the snapshot branch, which runs the pre-push review there. If the auto-fix clears every REQUIRED finding, the ship commits the fix and pushes again, up to `ship_fix_retries` times. If REQUIRED findings are still open, the ship fails and the report is copied to `.git/ship/<id>/code-review-report.md`.
 5. The ship then goes as far as `ship_stage`. Each stage includes the ones before it.
 
