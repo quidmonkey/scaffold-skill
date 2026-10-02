@@ -1,16 +1,16 @@
-# scaffold
+# scaffold 🏗️
 
 A world is coming, and will soon be here when the tools and processes that were previously used in a pre-agentic world will no longer be with us.
 
 CI is a relic, SDLC no longer makes sense, and the checks and balances of a compliant codebase will come and go, if not the concepts of git and a codebase.
 
-This skill exists to scaffold a Python project with `uv` and wires lint, type checks, security scans, tests and an AI code review into git hooks. 
+This skill exists to scaffold a Python project with `uv` and wires lint, type checks, security scans, tests and an AI code review into git hooks. 🪝
 
-It also adds a `/ship` skill whose intent is to ensure you never have to log into a website again and press buttons to ship code.
+It also adds a `/ship` skill whose intent is to ensure you never have to log into a website again and press buttons to ship code. 🚢
 
 When the process becomes automated, then necessity of the process is in question.
 
-## Install
+## 📦 Install
 
 ```bash
 git clone git@github.com:quidmonkey/scaffold-skill.git \
@@ -19,7 +19,7 @@ git clone git@github.com:quidmonkey/scaffold-skill.git \
 
 Requires [Claude Code](https://claude.ai/code), [uv](https://github.com/astral-sh/uv), Git and Python 3.12 or later.
 
-## Usage
+## 🛠️ Usage
 
 In a Claude Code session, run `/scaffold my-agent` or ask to "create a new python project called my-agent".
 
@@ -30,15 +30,15 @@ The skill asks one question first: not GCP, GCP, or a GCP agent built with Googl
 - agents-cli replaced agent-starter-pack, which Google now maintains for critical fixes only. The skill no longer scaffolds with agent-starter-pack.
 - GCP projects also get `docs/finops.md` and `docs/infra.md`.
 
-## What you get
+## 🎁 What you get
 
 | Tool | Job |
 |------|-----|
-| [ruff](https://github.com/astral-sh/ruff) | Lint, format, and complexity (C90) |
-| [ty](https://github.com/astral-sh/ty) | Type checking |
-| [bandit](https://github.com/PyCQA/bandit) | Security scanning |
-| [pytest](https://pytest.org) | Tests |
-| [pre-commit](https://pre-commit.com) | Runs the above as git hooks |
+| [ruff](https://github.com/astral-sh/ruff) | 🧹 Lint, format, and complexity (C90) |
+| [ty](https://github.com/astral-sh/ty) | 🔍 Type checking |
+| [bandit](https://github.com/PyCQA/bandit) | 🔒 Security scanning |
+| [pytest](https://pytest.org) | 🧪 Tests |
+| [pre-commit](https://pre-commit.com) | 🪝 Runs the above as git hooks |
 
 The hooks run in three stages:
 
@@ -48,7 +48,7 @@ The hooks run in three stages:
 
 The scaffold also writes `CLAUDE.md`, `.claude/settings.json`, a `docs/` folder, the `/ship` skill, and the scripts behind them in `scripts/`. `uv.lock` is committed. The default branch is `develop`. If its marketplace is registered, the scaffold also installs the `google-agents-cli` project plugin.
 
-## Keeping the agent honest
+## 🤖 Keeping the agent honest
 
 `CLAUDE.md` tells the agent to run pre-commit after each change and fix failures at the root cause. It also sets the source of truth: `docs/` first, then tests, then code. A failing test therefore sends the agent to the spec, not to the test file. The file is short on purpose. Hooks do the enforcing, so `CLAUDE.md` doesn't repeat what a hook already checks.
 
@@ -69,11 +69,11 @@ Claude Code ignores project `allow` rules in an untrusted directory, so the skil
 
 If you edit the rules, remember that `deny` beats `ask`, and `ask` beats `allow`. A broad `Bash(gcloud *)` in `ask` silently disables every specific `gcloud` allow rule.
 
-## Docs: one design doc, then specs
+## 📚 Docs: one design doc, then specs
 
 A new project has a single `docs/design.md`. Once it passes 400 lines or covers three flows, each flow moves to `docs/specs/<flow>.md` with a diagram beside it. `design.md` keeps the overview and a Flows index that links each spec. Starter files for both are in `docs/templates/`. The docs gate enforces the split and the links.
 
-## Code review on push
+## 👀 Code review on push
 
 Every `git push` runs `scripts/code-review.sh` as a pre-push hook. Two review passes run in parallel over the branch diff:
 
@@ -88,7 +88,7 @@ Each commit is reviewed once. The last passing commit per branch is recorded in 
 
 Settings live in `.codereviewrc`, which is gitignored, so each developer has their own. Its comments explain every key: models, effort levels, auto-fix, timeouts, and a custom agent command. Override any key for one push with `CR_<KEY>`, for example `CR_REVIEW_MODEL=sonnet git push`. To skip a review, use `SKIP_CODE_REVIEW=true git push` for one push, or set `enabled=false` for the repo. If the `claude` CLI isn't installed, the hook warns and lets the push through. A bad config blocks the push.
 
-## Decision history
+## 🧭 Decision history
 
 The project keeps its Architecture Decision Records (ADRs) as commit trailers instead of a `docs/adr/` folder. Each decision is recorded as `Decision:`, `Rejected:` and `Agent:` trailers on the commit that makes it, so the record lives with the change it explains. `scripts/decisions.sh <path>` lists them for a file. They come back up when that file changes:
 
@@ -98,7 +98,7 @@ The project keeps its Architecture Decision Records (ADRs) as commit trailers in
 
 Squash merges from the host's web UI drop trailers, so turn squash merging off for `develop`. See [docs/specs/decision-trailers.md](docs/specs/decision-trailers.md).
 
-## Shipping with /ship
+## 🚀 Shipping with /ship
 
 `/ship` ships the current branch into `develop` in the background while you keep working. It freezes HEAD as a snapshot branch and works in its own worktree (`../<repo>.ship-<id>`). It runs the same pre-push review there. Unlike a manual push, it commits a converged auto-fix and pushes again, up to `ship_fix_retries` times.
 
@@ -106,10 +106,10 @@ How far it goes is set by `ship_stage`, and each stage includes the ones before 
 
 | Stage | What it does |
 |-------|--------------|
-| `push` | Push the snapshot branch |
-| `open_pr` (default) | Open a PR into `develop` |
-| `merge` | Self-approve, arm auto-merge, wait for the merge |
-| `verify_deploy` | Wait for the dev deploy, check health, run the smoke test |
+| `push` | ⬆️ Push the snapshot branch |
+| `open_pr` (default) | 📬 Open a PR into `develop` |
+| `merge` | 🤝 Self-approve, arm auto-merge, wait for the merge |
+| `verify_deploy` | ✅ Wait for the dev deploy, check health, run the smoke test |
 
 `/ship <branch>` targets another branch. `/ship main` (or `master`) is a prod release: after you confirm it, `/ship` opens a PR from `develop` titled `prod 🚀` with drafted release notes as the description. It asks whether to self-approve and auto-merge, and defaults to leaving the merge to a human. `make ship-plan` runs every preflight check without changing anything. `/ship status` and `/ship stop` check on or cancel a running ship. The permission prompt on `make ship` is the one confirmation. Full details are in [docs/specs/ship-skill.md](docs/specs/ship-skill.md).
 
@@ -121,7 +121,7 @@ gh repo edit --default-branch develop   # or: az repos update --repository <repo
 git remote set-head origin develop
 ```
 
-### Adding /ship to an existing repo
+### 🔌 Adding /ship to an existing repo
 
 1. Copy `templates/skills/ship/` to `.claude/skills/ship/`, and copy `scripts/ship.sh`, `scripts/set-ship-stage.sh` and `scripts/lib/` from `templates/`. If `.gitignore` ignores `.claude/skills/`, add `!.claude/skills/ship/`.
 2. If the repo has no review gate, copy `scripts/code-review.sh` and add its pre-push hook from `templates/pre-commit-config.yaml`.
@@ -131,6 +131,6 @@ git remote set-head origin develop
 
 A repo whose default branch is still `main` works too. `ship.sh` bases the first review on `develop` either way.
 
-## Notes
+## 📝 Notes
 
 The opinions live in [templates/](./templates/): which tools, how they're configured, and what the agent is told. Treat them as a baseline, not rules. Everything installs locally through `uv`, docs live in the repo so the agent can read and update them, and setup stays small because a crowded context makes agents worse.
