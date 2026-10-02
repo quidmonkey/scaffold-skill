@@ -128,16 +128,17 @@ pr_poll_timeout=1800
 # --- verify_deploy (dev only) ----------------------------------------------------
 # ADO pipeline name or ID, or GitHub workflow name, that deploys develop.
 deploy_pipeline=
-# cloud_run | agent_engine
+# cloud_run | agent_runtime (agent_engine, its earlier name, also works)
 deploy_provider=
 # Dev GCP project ID.
 deploy_project=
 deploy_region=us-central1
-# Cloud Run service name, or Agent Engine display name.
+# Cloud Run service name, or Agent Runtime display name.
 deploy_name=
 # How to tell the deploy is this commit: sha | time (default time).
-#   sha: the Cloud Run revision is <service>-<sha12>, or the Agent Engine has a
-#        commit=<sha12> label. The deploy has to tag it (a scaffold question).
+#   sha: the Cloud Run revision is <service>-<sha12> or has a commit=<sha12>
+#        label, or the Agent Runtime has a commit=<sha12> label. The deploy has
+#        to tag it (a scaffold question).
 #   time: the revision or engine was created/updated after the run started.
 deploy_match=
 # Cloud Run only: smoke-test through `gcloud run services proxy` (for private

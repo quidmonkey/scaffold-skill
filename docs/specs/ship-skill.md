@@ -19,7 +19,7 @@ The new design moves all of it into a separate git worktree, so none of it touch
 - Isolation uses a git worktree, not a `/tmp` clone or an MCP server.
 - `/ship` only ever opens PRs into and merges into `develop`. It refuses `main`.
 - Deploy verification covers the dev environment only. Because ship never merges to `main`, it can't trigger a prod deploy.
-- Each repo has one deploy target: one Cloud Run service or one Agent Engine.
+- Each repo has one deploy target: one Cloud Run service or one Agent Runtime (formerly Agent Engine).
 - Self-approval is allowed on the target repos.
 - If a merge doesn't trigger a deploy run (because of pipeline path filters), there's nothing to verify, and the stage is recorded as skipped.
 - Deploy tagging with the commit SHA is optional. It becomes a scaffold question, and verification falls back to timing checks when tags aren't there.
@@ -56,10 +56,10 @@ The stage is resolved like any other setting (see Overrides): `/ship merge` is s
 | `scripts/lib/common.sh` | changed | `rc_get` checks the `CR_<KEY>` environment variable before `.codereviewrc` (see Overrides); list of known keys; `ship_base` constant |
 | `scripts/code-review.sh` | changed | Honors `REVIEW_BASE_BRANCH` for a branch's first review (see Review base) |
 | `scripts/enable-auto-pr.sh` | replaced by `scripts/set-ship-stage.sh` | Writes `ship_stage` into `.codereviewrc` |
-| `Makefile`, `asp/Makefile-addendum` | changed | `make ship [STAGE=..] [SET=..] [DETACH=1] [YES=1]`, `make ship-plan [STAGE=..] [SET=..]`, `make ship-stage STAGE=..`, `make ship-status [ID=..]`, `make ship-watch [ID=..]`, `make ship-stop [ID=..]`; `make auto-pr` kept as an alias for `make ship-stage STAGE=merge` |
+| `Makefile`, `agents-cli/Makefile` | changed | `make ship [STAGE=..] [SET=..] [DETACH=1] [YES=1]`, `make ship-plan [STAGE=..] [SET=..]`, `make ship-stage STAGE=..`, `make ship-status [ID=..]`, `make ship-watch [ID=..]`, `make ship-stop [ID=..]`; `make auto-pr` kept as an alias for `make ship-stage STAGE=merge` |
 | `.codereviewrc` | changed | New keys (see Configuration); `pr_automation` removed |
 | `settings.json` | unchanged | Already had `ask` rules for `Bash(make ship)`, `Bash(make ship *)`, `Bash(bash scripts/ship.sh*)` and `Bash(./scripts/ship.sh*)`. `make ship-plan`, `ship-status`, `ship-watch` and `ship-stop` stay under the `Bash(make *)` allow rule; `make ship *` doesn't match them |
-| `.gitignore`, `asp/gitignore-addendum` | changed | `.claude/skills/` became `.claude/skills/*` plus `!.claude/skills/ship/`, so the `/ship` skill is committed with the repo |
+| `.gitignore`, `agents-cli/gitignore-addendum` | changed | `.claude/skills/` became `.claude/skills/*` plus `!.claude/skills/ship/`, so the `/ship` skill is committed with the repo |
 
 In this skill's repo, `SKILL.md` (question list, Step 4 file table, Step 6 git init, Step 8 report), `README.md` and `templates/README.md` all need updating to match. `README.md` also gets the manual install steps (see Existing repos).
 
@@ -143,16 +143,16 @@ Everything below uses the merge commit.
 
    | Provider | Healthy means | `deploy_match=sha` | `deploy_match=time` |
    |---|---|---|---|
-   | `cloud_run` | `gcloud run services describe` shows Ready=True and 100% of traffic on the latest ready revision | That revision is named `<service>-<sha12>` | That revision's creation time is after the run started |
-   | `agent_engine` | The reasoning engine with display name `deploy_name` exists in `deploy_project`/`deploy_region` | The engine's `commit` label equals `<sha12>` | The engine's `updateTime` is after the run started |
+   | `cloud_run` | `gcloud run services describe` shows Ready=True and 100% of traffic on the latest ready revision | That revision is named `<service>-<sha12>` or has a `commit` label equal to `<sha12>` | That revision's creation time is after the run started |
+   | `agent_runtime` (or `agent_engine`, its earlier name) | The reasoning engine with display name `deploy_name` exists in `deploy_project`/`deploy_region` | The engine's `commit` label equals `<sha12>` | The engine's `updateTime` is after the run started |
 
-   The Agent Engine checks call the Vertex AI REST API with a token fetched inside the script. The token is never printed or logged. Which API fields to use (engine versus runtime revision) gets confirmed during implementation against Brady.Adk.SalesAgent.
+   The Agent Runtime checks call the Vertex AI REST API with a token fetched inside the script. The token is never printed or logged. Which API fields to use (engine versus runtime revision) gets confirmed during implementation against Brady.Adk.SalesAgent.
 
    When `deploy_match` is unset, it defaults to `time`. The scaffold sets it to `sha` for projects that tag deploys.
 
 4. **Smoke test.** Run `deploy_smoke` in the worktree, with a limit of `deploy_smoke_timeout` (default 900s). It gets these environment variables:
    - `DEPLOY_URL`: the Cloud Run URL. It's a local proxy URL when `deploy_proxy=true`.
-   - `DEPLOY_RESOURCE`: the Agent Engine resource name.
+   - `DEPLOY_RESOURCE`: the Agent Runtime resource name.
    - `DEPLOY_SHA`: the merge commit.
 
    When `deploy_proxy=true`, the script starts `gcloud run services proxy` on a free local port first and stops it afterward. That's for private services, where the smoke test can't mint an ID token from user credentials.
@@ -294,10 +294,10 @@ pr_reviewers=
 
 # --- verify_deploy (dev only) ---
 deploy_pipeline=                 # ADO pipeline name or ID, or GitHub workflow name
-deploy_provider=                 # cloud_run | agent_engine
+deploy_provider=                 # cloud_run | agent_runtime (or agent_engine)
 deploy_project=                  # dev GCP project ID
 deploy_region=us-central1
-deploy_name=                     # Cloud Run service or Agent Engine display name
+deploy_name=                     # Cloud Run service or Agent Runtime display name
 deploy_match=                    # sha | time (default time)
 deploy_proxy=false               # Cloud Run: smoke through gcloud run services proxy
 deploy_smoke=                    # e.g. SMOKE_TEST_REQUIRE_LIVE=1 make test-e2e
@@ -313,17 +313,16 @@ The existing keys stay: `pr_host`, `pr_merge_method`, `pr_self_approve`, `pr_pol
 ## Scaffold changes
 
 1. **New question: SHA tagging.** Asked only for GCP projects with a deploy target: "Tag deploys with the commit SHA? (Recommended: yes)".
-   - **Cloud Run:** the generated deploy command adds `--revision-suffix=$(git rev-parse --short=12 HEAD)`.
-   - **Agent Engine:** the generated deploy adds a `commit` label with the same value.
-   - In agent-starter-pack mode, the edit goes into agent-starter-pack's generated deploy code. The scaffold confirms the edit landed. If the expected code isn't found, it skips the edit and reports that.
+   - In agents-cli mode, the edit goes into the generated GitHub workflows: each `agents-cli deploy` gets `--labels commit=${GITHUB_SHA::12}`. That labels both an Agent Runtime and a Cloud Run revision. It's asked only for Full depth, since Prototype depth has no CI deploy. The scaffold confirms the edit landed. If the expected code isn't found, it skips the edit and reports that.
+   - A hand-written Cloud Run deploy can instead use `--revision-suffix=$(git rev-parse --short=12 HEAD)`; `/ship` accepts either.
    - The answer sets `deploy_match` (`sha` or unset) in the generated `.codereviewrc`.
 
-2. **Prefilled deploy settings.** When the scaffold knows the target (agent-starter-pack's `-d`), it fills in `deploy_provider`, `deploy_region` and `deploy_name`. `deploy_pipeline`, `deploy_project` and `deploy_smoke` are left for the developer.
+2. **Prefilled deploy settings.** When the scaffold knows the target (agents-cli's `-d`), it fills in `deploy_provider`, `deploy_name` and `deploy_region` (from `agents-cli-manifest.yaml`). `deploy_pipeline`, `deploy_project` and `deploy_smoke` are left for the developer.
 
 3. **Setup prompt.** `make setup` asks for the stage, defaulting to `open_pr`, instead of the yes/no auto-PR prompt.
 
 4. **`develop` as the default branch.**
-   - **Locally.** Step 6 makes the initial commit on `main`, then creates `develop` from it and checks it out. If agent-starter-pack already ran `git init`, the same steps apply to its repo.
+   - **Locally.** Step 6 makes the initial commit on `main`, then creates `develop` from it and checks it out.
    - **On the remote.** The scaffold creates no remote, so the report and `README.md` give the follow-up commands for the first push: push both branches, then `gh repo edit --default-branch develop` or `az repos update --repository <repo> --default-branch develop`, then `git remote set-head origin develop`.
    - **Preflight.** Preflight fails if `origin/develop` doesn't exist. It warns, but doesn't fail, if `origin/HEAD` isn't `develop`, and the warning includes the same commands.
 
@@ -380,7 +379,7 @@ Decisions the build made where the draft was silent, and additions to it.
 - **Makefile variables** (`STAGE`, `SET`, `ID`, `SHA`, `CONFIG`, `DETACH`, `YES`) are read only when their `$(origin)` is `command line`, so a stray `YES=1` in the environment can't skip the terminal prompt. `SET` and `STAGE` reach `ship.sh` through the shell (`"$SET"`), so values with spaces and parentheses survive.
 - **Deploy polling** reuses `pr_poll_interval` between polls; there's no separate key.
 - **JSON parsing.** `status.json` is written one `"key": "value"` per line with the config object last, so the scripts read and update it with `sed` and `awk`. gcloud and Vertex AI responses are parsed with `uv run --no-project python`, so the plan never syncs the project env and nothing needs `jq`.
-- **Agent Engine checks** list up to 100 reasoning engines per project and pick the one whose `displayName` is `deploy_name`; the health check is that it exists. The `commit` label and `updateTime` are read from the engine resource. Confirming those fields (engine versus runtime revision) against Brady.Adk.SalesAgent is still open.
-- **Cloud Run SHA tagging** makes a redeploy of the same commit fail, because the revision name `<service>-<sha12>` already exists. The scaffold report says so.
+- **Agent Runtime checks** list up to 100 reasoning engines per project and pick the one whose `displayName` is `deploy_name`; the health check is that it exists. The `commit` label and `updateTime` are read from the engine resource. Confirming those fields (engine versus runtime revision) against Brady.Adk.SalesAgent is still open.
+- **Cloud Run SHA tagging** by revision suffix makes a redeploy of the same commit fail, because the revision name `<service>-<sha12>` already exists. The `commit` label that agents-cli mode uses doesn't have that problem.
 - **ADO approval gates** are detected best-effort from the build timeline (`Checkpoint.Approval` records in progress). GitHub reports them directly as run status `waiting`.
 

@@ -1,16 +1,17 @@
 
 ## Repo governance: code review and shipping
 
-On top of the agent-starter-pack commands above (`make install`, `make test`, `make lint`, `make playground`, `make eval`, `make deploy`), this repo adds:
+On top of the agents-cli commands above (`agents-cli install`, `agents-cli playground`, `agents-cli lint`, `agents-cli eval`, `agents-cli deploy`), this repo adds a `Makefile` with its own governance targets:
 
 ```bash
+make setup      # one-time post-clone setup: uv sync, git hooks, ship stage
 make run-check  # confirm the agent still imports cleanly (also runs on git push)
 make review     # run the code review manually (also runs on git push)
 make ship       # review, push and ship the branch into develop (or /ship in a session)
 make ship-stage STAGE=open_pr  # how far make ship goes by default
 ```
 
-After `make install`, run `uv run pre-commit install` to add the git hooks. `/ship` opens PRs into `develop` and goes as far as `open_pr` by default; `make ship-stage` changes that. See [Shipping a branch](#shipping-a-branch).
+After cloning, run `make setup`. `/ship` opens PRs into `develop` and goes as far as `open_pr` by default; `make ship-stage` changes that. See [Shipping a branch](#shipping-a-branch).
 
 The default branch is `develop`. On the repo's first push, make it the remote default too:
 
@@ -180,7 +181,7 @@ An unknown key fails the plan and names the closest known one. An empty value me
 
 `verify_deploy` checks the dev environment only, after filling in the `deploy_*` keys in `.codereviewrc`. It looks for a `deploy_pipeline` run on `develop` for the merge commit. If none appears within `deploy_run_grace` seconds, the pipeline's path filters excluded the change: the stage is recorded as skipped and the ship passes.
 
-Once the run succeeds, the target has to be healthy. A Cloud Run service needs Ready=True and 100% of traffic on its latest ready revision; an Agent Engine has to exist under `deploy_name`. It also has to be this commit. With `deploy_match=sha` the revision must be named `<service>-<sha12>`, or the engine must carry a `commit=<sha12>` label. Otherwise it must have been created or updated after the run started.
+Once the run succeeds, the target has to be healthy. A Cloud Run service needs Ready=True and 100% of traffic on its latest ready revision; an Agent Runtime has to exist under `deploy_name`. It also has to be this commit. With `deploy_match=sha` the Cloud Run revision must be named `<service>-<sha12>` or carry a `commit=<sha12>` label, and the Agent Runtime must carry a `commit=<sha12>` label. Otherwise it must have been created or updated after the run started.
 
 The smoke test (`deploy_smoke`) runs in the ship's worktree with `DEPLOY_URL`, `DEPLOY_RESOURCE` and `DEPLOY_SHA` set, and its exit code decides the result. A smoke test that skips and exits 0 when it can't reach the target makes this check meaningless, so set its require-live flag (for example `SMOKE_TEST_REQUIRE_LIVE=1`). For a private Cloud Run service, `deploy_proxy=true` points `DEPLOY_URL` at a local `gcloud run services proxy`.
 
@@ -198,9 +199,9 @@ The smoke test (`deploy_smoke`) runs in the ship's worktree with `DEPLOY_URL`, `
 | `pr_self_approve` | `true`, `false`; a host that rejects self-review makes it a no-op | `true` |
 | `pr_poll_interval` / `pr_poll_timeout` | seconds between polls / before the merge stage gives up | `15` / `1800` |
 | `deploy_pipeline` | ADO pipeline name or ID, or GitHub workflow name | none |
-| `deploy_provider` | `cloud_run`, `agent_engine` | none |
+| `deploy_provider` | `cloud_run`, `agent_runtime` (or its earlier name, `agent_engine`) | none |
 | `deploy_project` / `deploy_region` | dev GCP project / region | none / `us-central1` |
-| `deploy_name` | Cloud Run service or Agent Engine display name | none |
+| `deploy_name` | Cloud Run service or Agent Runtime display name | none |
 | `deploy_match` | `sha`, `time` | `time` |
 | `deploy_proxy` | `true`, `false` | `false` |
 | `deploy_smoke` | smoke test command | none |
@@ -210,6 +211,6 @@ The smoke test (`deploy_smoke`) runs in the ship's worktree with `DEPLOY_URL`, `
 
 ## Documentation
 
-Design docs live in `docs/`, alongside the agent-starter-pack dev and deployment guides linked from `CLAUDE.md`. `design.md` is the source of truth for architecture decisions; the code review's second pass enforces it, so keep it current.
+Design docs live in `docs/`, alongside the agents-cli development and deployment guides referenced from `CLAUDE.md`. `design.md` is the source of truth for architecture decisions; the code review's second pass enforces it, so keep it current.
 
 One file holds the whole design at first. Once `design.md` passes ~400 lines or covers three or more flows, create `docs/specs/` and move each flow into its own `docs/specs/<flow>.md` with a `docs/specs/<flow>-diagram.mmd` beside it, leaving `design.md` the overview, the Flows index, the architecture, and the cross-cutting concerns. `docs/templates/` holds the skeleton a new spec starts from and the starting shape and content rules for its diagram. The docs sync gate blocks a turn that adds a spec without its diagram or without linking it from the index.

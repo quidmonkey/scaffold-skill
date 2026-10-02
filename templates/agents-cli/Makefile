@@ -1,9 +1,15 @@
+# Repo governance targets, added by the scaffold skill. Agent development,
+# eval and deploy commands come from agents-cli (`agents-cli --help`).
 
-# ==============================================================================
-# Repo governance (layered on top of agent-starter-pack by the scaffold skill)
-# ==============================================================================
+.PHONY: help setup run-check review ship ship-plan ship-stage ship-status ship-watch ship-stop auto-pr
 
-.PHONY: run-check review ship ship-plan ship-stage ship-status ship-watch ship-stop auto-pr
+help: ## Show available targets
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-12s %s\n", $$1, $$2}'
+
+setup: ## One-time post-clone setup (uv sync, pre-commit, asks how far make ship goes)
+	uv sync
+	uv run pre-commit install
+	bash scripts/set-ship-stage.sh --prompt
 
 run-check: ## Confirm the agent still imports cleanly (also runs on git push)
 	uv run python -c "import {{code-dir}}.agent"

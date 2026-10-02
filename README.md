@@ -23,10 +23,11 @@ Requires [Claude Code](https://claude.ai/code), [uv](https://github.com/astral-s
 
 In a Claude Code session, run `/scaffold my-agent` or ask to "create a new python project called my-agent".
 
-The skill asks one question first: not GCP, GCP, or GCP via Google's [agent-starter-pack](https://github.com/GoogleCloudPlatform/agent-starter-pack).
+The skill asks one question first: not GCP, GCP, or a GCP agent built with Google's [agents-cli](https://github.com/google/agents-cli).
 
-- Without agent-starter-pack, it asks for a layout: a single package in `src/<name>/`, or a monorepo under `packages/<name>/`.
-- With agent-starter-pack, it asks for the agent template, deployment target and scaffold depth. It then layers this skill's tooling on top of the generated project.
+- Without agents-cli, it asks for a layout: a single package in `src/<name>/`, or a monorepo under `packages/<name>/`.
+- With agents-cli, it asks for the agent template, deployment target and scaffold depth. It then layers this skill's tooling on top of the generated project. agents-cli has no Makefile, so the skill adds one with only its own targets (`setup`, `run-check`, `review`, `ship`).
+- agents-cli replaced agent-starter-pack, which Google now maintains for critical fixes only. The skill no longer scaffolds with agent-starter-pack.
 - GCP projects also get `docs/finops.md` and `docs/infra.md`.
 
 ## What you get

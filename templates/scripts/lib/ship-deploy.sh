@@ -3,7 +3,7 @@
 # target is healthy and running that commit, then run the smoke test.
 # Sourced after lib/common.sh; uses ship.sh's cfg_*, pf_* and status helpers.
 #
-# gcloud calls are read-only. The Agent Engine checks call the Vertex AI REST
+# gcloud calls are read-only. The Agent Runtime checks call the Vertex AI REST
 # API with a token fetched here; it goes to curl on stdin, never on a command
 # line or into the log.
 
@@ -76,7 +76,8 @@ deploy_preflight() {
         pf_fail "verify_deploy needs these set in .codereviewrc (or with --set):$missing."
         return
     fi
-    check_enum deploy_provider cloud_run agent_engine
+    # agent_engine is Agent Runtime's earlier name; both read the same API.
+    check_enum deploy_provider cloud_run agent_runtime agent_engine
 
     case "$cfg_pr_host" in
         gh)
@@ -104,9 +105,9 @@ deploy_preflight() {
             deploy_cloud_run_json >/dev/null \
                 || pf_fail "gcloud can't read Cloud Run service '$cfg_deploy_name' in $cfg_deploy_project/$cfg_deploy_region. Check deploy_name, deploy_project, deploy_region and your access."
             ;;
-        agent_engine)
+        agent_runtime | agent_engine)
             deploy_engine >/dev/null \
-                || pf_fail "No Agent Engine named '$cfg_deploy_name' is readable in $cfg_deploy_project/$cfg_deploy_region. Check deploy_name, deploy_project, deploy_region and your access."
+                || pf_fail "No Agent Runtime named '$cfg_deploy_name' is readable in $cfg_deploy_project/$cfg_deploy_region. Check deploy_name, deploy_project, deploy_region and your access."
             ;;
     esac
     pf_ok "deploy target readable ($cfg_deploy_provider '$cfg_deploy_name')"
@@ -203,10 +204,16 @@ print(ready, latest, pct, st.get("url", ""), sep="\t")') \
                 return 1
             fi
             if [ "$cfg_deploy_match" = sha ]; then
-                [ "$latest" = "$cfg_deploy_name-$sha12" ] || {
-                    deploy_msg="latest ready revision is $latest, not $cfg_deploy_name-$sha12 (deploy_match=sha)"
-                    return 1
-                }
+                # Either tagging works: a <service>-<sha12> revision name
+                # (gcloud --revision-suffix) or a commit=<sha12> label
+                # (agents-cli deploy --labels, which has no suffix flag).
+                [ "$latest" = "$cfg_deploy_name-$sha12" ] \
+                    || [ "$(gcloud run revisions describe "$latest" --project "$cfg_deploy_project" \
+                        --region "$cfg_deploy_region" --format='value(metadata.labels.commit)' 2>/dev/null)" = "$sha12" ] \
+                    || {
+                        deploy_msg="latest ready revision $latest is neither named $cfg_deploy_name-$sha12 nor labeled commit=$sha12 (deploy_match=sha)"
+                        return 1
+                    }
             else
                 created=$(gcloud run revisions describe "$latest" --project "$cfg_deploy_project" \
                     --region "$cfg_deploy_region" --format='value(metadata.creationTimestamp)' 2>/dev/null)
@@ -217,21 +224,21 @@ print(ready, latest, pct, st.get("url", ""), sep="\t")') \
             fi
             deploy_msg="Cloud Run $cfg_deploy_name healthy on $latest"
             ;;
-        agent_engine)
-            out=$(deploy_engine) || { deploy_msg="couldn't read Agent Engine '$cfg_deploy_name'"; return 1; }
+        agent_runtime | agent_engine)
+            out=$(deploy_engine) || { deploy_msg="couldn't read Agent Runtime '$cfg_deploy_name'"; return 1; }
             IFS=$'\t' read -r deploy_resource commit updated <<< "$out"
             if [ "$cfg_deploy_match" = sha ]; then
                 [ "$commit" = "$sha12" ] || {
-                    deploy_msg="Agent Engine '$cfg_deploy_name' has commit label '${commit:-none}', not $sha12 (deploy_match=sha)"
+                    deploy_msg="Agent Runtime '$cfg_deploy_name' has commit label '${commit:-none}', not $sha12 (deploy_match=sha)"
                     return 1
                 }
             else
                 deploy_after "$updated" "$run_start" || {
-                    deploy_msg="Agent Engine '$cfg_deploy_name' was last updated at $updated, before the deploy run started ($run_start)"
+                    deploy_msg="Agent Runtime '$cfg_deploy_name' was last updated at $updated, before the deploy run started ($run_start)"
                     return 1
                 }
             fi
-            deploy_msg="Agent Engine $deploy_resource updated"
+            deploy_msg="Agent Runtime $deploy_resource updated"
             ;;
     esac
 }

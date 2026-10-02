@@ -3,15 +3,15 @@
 
 # Repo Governance
 
-The sections above come from `agent-starter-pack`; this section layers this repo's own review, docs, and shipping discipline on top. It applies alongside the ADK development phases above, not instead of them.
+The sections above come from `agents-cli`; this section layers this repo's own review, docs, and shipping discipline on top. It applies alongside the ADK development phases above, not instead of them.
 
 ## Toolchain additions
 
-Beyond the agent-starter-pack stack (uv, ruff, ty, ADK eval), this repo also runs:
+Beyond the agents-cli stack (uv, ruff, ty, ADK eval), this repo also runs:
 - bandit — security scanner (pre-commit and pre-push)
 - pre-commit — git hooks, installed once via `uv run pre-commit install` at scaffold time
 
-The pre-push pytest hook runs `tests/unit` only, not `tests/integration` — the integration suite makes live Vertex AI calls and fails without real GCP credentials, which a push shouldn't require. `make test` is unaffected and still runs both.
+The pre-push pytest hook runs `tests/unit` only, not `tests/integration` — the integration suite makes live Vertex AI calls and fails without real GCP credentials, which a push shouldn't require. `uv run pytest tests/unit tests/integration` is unaffected and still runs both.
 
 ## Design and architecture proposals
 
@@ -59,7 +59,7 @@ uv run pre-commit run --all-files               # once, before reporting the tas
 make run-check                                  # confirms the agent imports cleanly; also runs on git push
 ```
 
-`make run-check` here is an import check, not a substitute for `make playground` or `make eval` — run those too for behavioral changes, per the development phases above. When the agent's entry point changes, update the target in the same change so it keeps exercising real startup.
+`make run-check` here is an import check, not a substitute for `agents-cli playground` or `agents-cli eval run` — run those too for behavioral changes, per the development phases above. When the agent's entry point changes, update the target in the same change so it keeps exercising real startup.
 
 An edit that touches only docs or other prose needs nothing more: the Stop hook already runs pre-commit on the changed files.
 
@@ -80,7 +80,7 @@ Never set `SKIP_CODE_REVIEW`, set `enabled=false` in `.codereviewrc`, or use `SK
 
 ## Documentation
 
-Project docs live in `docs/`, alongside the agent-starter-pack guides linked above:
+Project docs live in `docs/`, alongside the agents-cli guides referenced above:
 - `design.md` — RFC; defines architecture and design decisions
 - `design.mmd` — Mermaid diagram of the design
 - `templates/` — starting points for per-flow specs and diagrams
