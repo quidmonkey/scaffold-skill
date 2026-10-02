@@ -62,7 +62,7 @@ Both exit 2 and write to stderr, because that is the only channel the model sees
 The same file sets the permissions:
 
 - Read-only `gcloud`, `terraform` and `docker` commands are pre-approved.
-- These always prompt: `terraform apply` and `destroy`, secret reads, auth changes, `docker run`/`exec`/`build`, `make deploy` and `make ship`.
+- These always prompt: `terraform apply` and `destroy`, secret reads, auth changes, `docker run`/`exec`, `make deploy`, `make ship`, and in agents-cli mode `agents-cli deploy`, `infra` and `publish`.
 - The project starts in auto mode. Set `defaultMode` to `default` to go back to manual prompts.
 
 Claude Code ignores project `allow` rules in an untrusted directory, so the skill marks the new directory as trusted in `~/.claude.json`. To undo it, set `hasTrustDialogAccepted` back to `false`.
