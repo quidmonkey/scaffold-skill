@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Deploy verification for scripts/ship.sh's verify_deploy stage, dev only:
 # find the deploy_pipeline run on the merge commit, wait for it, check the
 # target is healthy and running that commit, then run the smoke test.

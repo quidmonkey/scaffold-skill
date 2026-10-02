@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Status, event and log helpers for scripts/ship.sh, plus retention pruning.
 # Sourced after lib/common.sh, not executed.
 #

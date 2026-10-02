@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Shared helpers for scripts/code-review.sh, scripts/ship.sh and
 # scripts/set-ship-stage.sh. Sourced, not executed — no shebang, no set -u here
 # (each caller sets its own options).
