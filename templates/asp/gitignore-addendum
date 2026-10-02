@@ -1,5 +1,5 @@
 
-# Added by python-gcp-agentic-project-skill (layered on agent-starter-pack)
+# Added by the scaffold skill (layered on agent-starter-pack)
 .ruff_cache/
 # Per-project skills stay local, except /ship, which the team shares.
 .claude/skills/*

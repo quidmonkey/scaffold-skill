@@ -18,11 +18,11 @@ allowed-tools:
   - AskUserQuestion
 ---
 
-# Python GCP Agentic Project Skill
+# Scaffold
 
 Scaffold a Python project with ruff, ty, bandit, pytest, pre-commit, and agent instruction files. For GCP projects, optionally hands base scaffolding to Google's [agent-starter-pack](https://github.com/GoogleCloudPlatform/agent-starter-pack) and layers this skill's lint/pre-commit/code-review/docs tooling on top rather than replacing it.
 
-Templates: `~/.claude/skills/python-gcp-agentic-project-skill/templates/` (plain scaffold), `~/.claude/skills/python-gcp-agentic-project-skill/templates/asp/` (agent-starter-pack addenda)
+Templates: `~/.claude/skills/scaffold/templates/` (plain scaffold), `~/.claude/skills/scaffold/templates/asp/` (agent-starter-pack addenda)
 Placeholders: `{{project-name}}`, `{{package_name}}`, `{{code-dir}}`, `{{test-dir}}`, `{{layout-line}}`, `{{gcp-doc-lines}}`, `{{gcp-sync-rule}}`, `{{lint-target}}`, `{{bandit-exclude-arg}}`, and (ASP mode) `{{asp-agent}}`, `{{asp-deployment-target}}`, `{{asp-depth-flag}}`
 
 ## Step 1: Gather inputs
@@ -130,7 +130,7 @@ uv add --dev ruff ty "bandit[toml]" pytest pre-commit
 
 ## Step 4: Write config files
 
-Read each template from `~/.claude/skills/python-gcp-agentic-project-skill/templates/`, substitute all placeholders, write to destination.
+Read each template from `~/.claude/skills/scaffold/templates/`, substitute all placeholders, write to destination.
 
 Notes:
 - `uv init` (plain scaffold) and `agent-starter-pack create` (ASP scaffold) both pre-create `.gitignore`, `README.md`, and `pyproject.toml`. To overwrite a file, Read it first (the harness blocks overwrite-without-read), then Write. Where the table below says **append**, use Edit/Read + append instead — never overwrite a file agent-starter-pack owns.

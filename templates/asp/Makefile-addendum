@@ -1,6 +1,6 @@
 
 # ==============================================================================
-# Repo governance (layered on top of agent-starter-pack by python-gcp-agentic-project-skill)
+# Repo governance (layered on top of agent-starter-pack by the scaffold skill)
 # ==============================================================================
 
 .PHONY: run-check review ship ship-plan ship-stage ship-status ship-watch ship-stop auto-pr
