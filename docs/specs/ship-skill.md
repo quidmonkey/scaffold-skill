@@ -259,7 +259,7 @@ The skill file is `.claude/skills/ship/SKILL.md` in the generated project.
 | `/ship status [id]` | Summarizes every running ship and the last few finished ones from their `status.json` files |
 | `/ship stop [id]` | Kills the background process, sets the state to `stopped`, and reports anything left behind: an open PR, armed auto-complete, the worktree |
 
-The job keeps running if the session closes. When `ship_notify=desktop` is set, the script also sends a macOS notification at each stage (default `none`).
+The job keeps running if the session closes. When `ship_notify=desktop` is set, the script also sends a macOS notification when the ship passes, fails or stops (default `none`).
 
 ## Review base
 
@@ -285,7 +285,7 @@ ship_stage=open_pr
 # Days to keep finished ship logs; 0 keeps them forever.
 ship_log_retention_days=30
 
-# none | desktop (macOS notification per stage)
+# none | desktop (macOS notification when the ship finishes)
 ship_notify=none
 
 # Reviewers added to the PR, comma-separated. Empty adds none.

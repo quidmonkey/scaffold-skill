@@ -215,7 +215,7 @@ The smoke test (`deploy_smoke`) runs in the ship's worktree with `DEPLOY_URL`, `
 | `ship_stage` | `push`, `open_pr`, `merge`, `verify_deploy` | `open_pr` |
 | `ship_fix_retries` | times one ship commits an auto-fix and pushes again | `1` |
 | `ship_log_retention_days` | days to keep finished ship logs; `0` keeps them | `30` |
-| `ship_notify` | `none`, `desktop` (macOS notification per stage) | `none` |
+| `ship_notify` | `none`, `desktop` (macOS notification when a ship passes, fails or stops) | `none` |
 | `pr_host` | `gh`, `az` | detected from `origin` |
 | `pr_reviewers` | comma-separated GitHub users or `org/team`; ADO emails or `[Project]\Team` | none |
 | `pr_merge_method` | `squash`, `merge`, `rebase` | `squash` |

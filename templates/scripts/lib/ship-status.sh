@@ -85,7 +85,7 @@ ship_notify() {
 }
 
 # ship_event <ship-dir> <stage> <state> <message> — appends to events, updates
-# status.json, prints the event to the log, and notifies.
+# status.json, prints the event to the log, and notifies when the ship finishes.
 ship_event() {
     local dir=$1 stage=$2 state=$3 msg
     msg=$(printf '%s' "$4" | tr '\t\n' '  ')
@@ -95,7 +95,7 @@ ship_event() {
     status_set "$dir/status.json" message "$msg"
     echo ""
     echo "==> [$stage] $state: $msg"
-    ship_notify "$stage $state: $msg"
+    [ "$stage" != finish ] || ship_notify "$state: $msg"
 }
 
 # ship_pid_alive <ship-dir> — true while the ship's recorded process runs.
