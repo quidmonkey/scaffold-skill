@@ -4,11 +4,11 @@ A world is coming, and will soon be here when the tools and processes that were 
 
 CI is a relic, SDLC no longer makes sense, and the checks and balances of a compliant codebase will come and go, if not the concepts of git and a codebase.
 
-This skill exists to scaffold a Python project with `uv` and wires lint, type checks, security scans, tests and an AI code review into git hooks. 🪝
+This skill exists to scaffold a Python project with `uv` and wire lint, type checks, security scans, tests and an AI code review into git hooks. 🪝
 
 It also adds a `/ship` skill whose intent is to ensure you never have to log into a website again and press buttons to ship code. 🚢
 
-When the process becomes automated, then necessity of the process is in question.
+When the process becomes automated, then the necessity of the process is in question.
 
 ## 📦 Install
 
