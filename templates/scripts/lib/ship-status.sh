@@ -75,13 +75,29 @@ status_get() {
         | sed -e 's/\\"/"/g' -e 's/\\\\/\\/g'
 }
 
-# ship_notify <message> — a macOS notification when ship_notify=desktop.
+# ship_notify <message> — a desktop notification when ship_notify=desktop:
+# osascript on macOS, a toast through powershell.exe on Windows (Git Bash or
+# WSL), notify-send on Linux. Does nothing when none of them is installed.
 ship_notify() {
     [ "$(rc_value ship_notify)" = desktop ] || return 0
-    command -v osascript >/dev/null 2>&1 || return 0
-    local msg
+    local msg q="'"
     msg=$(printf '%s' "$1" | tr "\"\\\\" "'/")
-    osascript -e "display notification \"$msg\" with title \"ship\"" >/dev/null 2>&1 || true
+    if command -v osascript >/dev/null 2>&1; then
+        osascript -e "display notification \"$msg\" with title \"ship\""
+    elif command -v powershell.exe >/dev/null 2>&1; then
+        # The toast is shown under PowerShell's app ID, which Windows always
+        # has registered. The message goes in as a text node, so it needs no
+        # XML escaping, only PowerShell's '' for a quote.
+        powershell.exe -NoProfile -NonInteractive -Command "
+            \$null = [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
+            \$xml = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+            \$text = \$xml.GetElementsByTagName('text')
+            \$null = \$text.Item(0).AppendChild(\$xml.CreateTextNode('ship'))
+            \$null = \$text.Item(1).AppendChild(\$xml.CreateTextNode('${msg//$q/$q$q}'))
+            [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe').Show([Windows.UI.Notifications.ToastNotification]::new(\$xml))"
+    elif command -v notify-send >/dev/null 2>&1; then
+        notify-send ship "$msg"
+    fi >/dev/null 2>&1 || true
 }
 
 # ship_event <ship-dir> <stage> <state> <message> — appends to events, updates

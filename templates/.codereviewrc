@@ -97,7 +97,7 @@ ship_stage=open_pr
 # Days to keep finished ship logs in .git/ship/; 0 keeps them forever.
 ship_log_retention_days=30
 
-# none | desktop (macOS notification when the ship finishes)
+# none | desktop (desktop notification on macOS, Windows or Linux when the ship finishes)
 ship_notify=none
 
 # CLI used to open/approve/merge the PR: gh | az. Auto-detected from
