@@ -1,6 +1,14 @@
 # scaffold
 
-A Claude Code skill that scaffolds a Python project with `uv` and wires lint, type checks, security scans, tests and an AI code review into git hooks. It also adds agent instructions and Claude Code hooks so an agent can't finish a turn while those checks fail.
+A world is coming, and will soon be here when the tools and processes that were previously used in a pre-agentic world will no longer be with us.
+
+CI is a relic, SDLC no longer makes sense, and the checks and balances of a compliant codebase will come and go, if not the concepts of git and a codebase.
+
+This skill exists to scaffold a Python project with `uv` and wires lint, type checks, security scans, tests and an AI code review into git hooks. 
+
+It also adds a `/ship` skill whose intent is to ensure you never have to log into a website again and press buttons to ship code.
+
+When the process becomes automated, then necessity of the process is in question.
 
 ## Install
 
