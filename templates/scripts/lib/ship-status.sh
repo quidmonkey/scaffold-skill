@@ -303,6 +303,8 @@ ship_stop() {
         [ "$(status_get "$f" auto_merge)" = armed ] \
             && echo "  Auto-merge/auto-complete is still armed: it merges once the PR's checks pass. Cancel it on the PR if that's not wanted."
     fi
-    echo "  Worktree kept: $(status_get "$f" worktree)"
-    echo "  Snapshot branch kept: $(status_get "$f" snapshot_branch)"
+    # A prod ship has neither.
+    [ -n "$(status_get "$f" worktree)" ] && echo "  Worktree kept: $(status_get "$f" worktree)"
+    [ -n "$(status_get "$f" snapshot_branch)" ] && echo "  Snapshot branch kept: $(status_get "$f" snapshot_branch)"
+    return 0
 }

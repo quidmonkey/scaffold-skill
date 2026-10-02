@@ -111,7 +111,7 @@ How far it goes is set by `ship_stage`, and each stage includes the ones before 
 | `merge` | Self-approve, arm auto-merge, wait for the merge |
 | `verify_deploy` | Wait for the dev deploy, check health, run the smoke test |
 
-`/ship` only targets `develop`, so it can't deploy to prod. `make ship-plan` runs every preflight check without changing anything. `/ship status` and `/ship stop` check on or cancel a running ship. The permission prompt on `make ship` is the one confirmation. Full details are in [docs/specs/ship-skill.md](docs/specs/ship-skill.md).
+`/ship <branch>` targets another branch. `/ship main` (or `master`) is a prod release: after you confirm it, `/ship` opens a PR from `develop` titled `prod 🚀` with drafted release notes as the description. It asks whether to self-approve and auto-merge, and defaults to leaving the merge to a human. `make ship-plan` runs every preflight check without changing anything. `/ship status` and `/ship stop` check on or cancel a running ship. The permission prompt on `make ship` is the one confirmation. Full details are in [docs/specs/ship-skill.md](docs/specs/ship-skill.md).
 
 The scaffold creates no remote. After you add one, push both branches and make `develop` the default:
 

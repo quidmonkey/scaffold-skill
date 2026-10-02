@@ -26,7 +26,7 @@ make lint       # run all pre-commit hooks
 make check      # ruff + ty
 make run-check  # confirm the app still starts (also runs on git push)
 make review     # run the code review manually (also runs on git push)
-make ship       # review, push and ship the branch into develop (or /ship in a session)
+make ship       # review, push and ship the branch into develop (or /ship in a session; BRANCH=main for a prod release)
 make ship-stage STAGE=open_pr  # how far make ship goes by default
 ```
 
@@ -161,11 +161,13 @@ Run `/ship` in a Claude Code session, or `make ship` in a terminal. The ship run
 | `merge` | Self-approves, arms auto-merge (squash, delete the source branch), and waits for the merge |
 | `verify_deploy` | Waits for the dev pipeline run on the merge commit, checks the service is healthy and running that commit, and runs the smoke test |
 
-Ship only ever targets `develop`. It never merges to `main`, so it can't trigger a prod deploy. Your checkout and local branches are never touched: after a merge the final message suggests `git branch -d <branch>`, and nothing else changes. A passed ship removes its worktree and local snapshot branch. A failed or stopped one keeps both for inspection.
+A ship targets `develop` unless you name another branch (`/ship staging`, `make ship BRANCH=staging`). Naming `main` or `master` starts a prod release instead; see [Prod releases](#prod-releases). Your checkout and local branches are never touched: after a merge the final message suggests `git branch -d <branch>`, and nothing else changes. A passed ship removes its worktree and local snapshot branch. A failed or stopped one keeps both for inspection.
 
 ```bash
 /ship                        # plan, confirm, run in the background, report each stage
 /ship merge                  # a different stage for this run
+/ship staging                # target a branch other than develop
+/ship main                   # prod release: PR from develop into main (see below)
 /ship review_model=sonnet    # any .codereviewrc key, for this run
 /ship status                 # running and recent ships
 /ship stop                   # stop a running ship and list what it left (open PR, armed auto-merge)
@@ -178,6 +180,14 @@ make ship-stage STAGE=open_pr                          # change your default sta
 A background ship keeps running if the session closes. Each ship's `status.json`, `events`, `ship.log` and review report live in `.git/ship/<id>/`. They're deleted `ship_log_retention_days` (default 30) after the ship finishes.
 
 At `open_pr` without named reviewers, `/ship` asks whether to add any. At `merge` and above the PR is approved and merged right away, so the plan warns if `pr_reviewers` is set.
+
+### Prod releases
+
+`/ship main` (or `master`) releases `develop` into it. It asks two things first: whether this is a prod deploy that merges `develop` into `main`, and whether to self-approve and auto-merge. The default answer to the second is no, which stops at an open PR for a human to approve and merge. `ship_stage` in `.codereviewrc` doesn't apply to prod.
+
+The release is `origin/develop` at the commit the plan saw. There's no worktree and no push, because every change was reviewed on its way into `develop`. `/ship` drafts release notes from the commits and recorded decisions since `main` and shows them before the permission prompt. The PR is titled `prod 🚀` with the notes as its description. It merges with a merge commit, so `main` and `develop` don't diverge, and it never deletes `develop`. If `develop` moves while the PR waits, the ship fails rather than release commits nobody planned. `verify_deploy` checks the dev deploy only, so a prod release goes no further than `merge`.
+
+From a terminal, `make ship BRANCH=main NOTES=<file>` does the same with your own notes file. Without `NOTES`, the description is a generated list of commit subjects.
 
 ### Overrides
 

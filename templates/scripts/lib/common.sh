@@ -5,8 +5,8 @@
 # Constants below are used by the scripts that source this file.
 # shellcheck disable=SC2034
 
-# The only branch ship.sh opens PRs into and merges into. main is never a
-# target: ship can't trigger a prod deploy.
+# The branch ship.sh opens PRs into and merges into by default (--target
+# changes it), and the branch a prod ship (--target main or master) releases.
 ship_base=develop
 
 # code-review.sh's fix/verify loop touches this file instead of just

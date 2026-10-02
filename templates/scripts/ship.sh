@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
-# Ship the current branch into develop from a separate git worktree, so none of
-# it touches the developer's checkout. See docs in README.md ("Shipping").
+# Ship the current branch into develop (or --target) from a separate git
+# worktree, so none of it touches the developer's checkout. See docs in
+# README.md ("Shipping").
+#
+# A prod ship (--target main or master) instead opens a PR from origin/develop,
+# frozen at its planned commit, into that branch: no worktree and no push
+# (every change was reviewed on its way into develop). The PR is titled
+# 'prod 🚀' with the --notes-file release notes as its description, it merges
+# with a merge commit and never deletes develop, and its stage defaults to
+# open_pr whatever .codereviewrc says.
 #
 #   plan      read .codereviewrc and overrides, check the repo and every tool the
 #             stage needs, print the config block. Creates nothing.
@@ -13,8 +21,8 @@
 #             .git/ship/<id>/events.
 #
 # Usage:
-#   ship.sh --plan [--stage S] [--set k=v ...] [--sets 'k=v;k=v']
-#   ship.sh [--stage S] [--set ...] [--detach] [--yes]
+#   ship.sh --plan [--target B] [--notes-file F] [--stage S] [--set k=v ...] [--sets 'k=v;k=v']
+#   ship.sh [--target B] [--notes-file F] [--stage S] [--set ...] [--detach] [--yes]
 #           [--id ID --expect-sha SHA --expect-config HASH]
 #   ship.sh --status [ID] | --stop [ID] | --watch [ID]
 #
@@ -24,7 +32,8 @@
 #
 # Without --id, kickoff shows the plan and asks Proceed? [y/N] on a terminal,
 # and refuses without one unless --yes. With --id (what /ship passes after its
-# plan), it refuses if HEAD or any resolved setting changed since that plan.
+# plan), it refuses if HEAD (origin/develop for prod), any resolved setting,
+# the target or the release notes changed since that plan.
 
 # shellcheck disable=SC2154 # cfg_<key> is assigned by resolve_config via printf -v
 set -u
@@ -51,6 +60,8 @@ ship_id=""
 expect_sha=""
 expect_config=""
 set_keys=" "
+target_arg=""
+notes_file=""
 
 # add_set <key=value> — a one-run override, exported as CR_<KEY>.
 add_set() {
@@ -79,6 +90,8 @@ while [ $# -gt 0 ]; do
         --id) ship_id=${2:?--id needs a value}; shift ;;
         --expect-sha) expect_sha=${2:?--expect-sha needs a value}; shift ;;
         --expect-config) expect_config=${2:?--expect-config needs a value}; shift ;;
+        --target) target_arg=${2:?--target needs a branch}; shift ;;
+        --notes-file) notes_file=${2:?--notes-file needs a path}; shift ;;
         --stage) add_set "ship_stage=${2:?--stage needs a value}"; shift ;;
         --set) add_set "${2:?--set needs key=value}"; shift ;;
         --sets)
@@ -97,6 +110,28 @@ while [ $# -gt 0 ]; do
 done
 
 cd "$(git rev-parse --show-toplevel 2>/dev/null)" || die "not inside a git repository."
+
+# ship_dev is the integration branch: the default target, and what a prod ship
+# releases. ship_base is this ship's target.
+ship_dev=$ship_base
+if [ -n "$target_arg" ]; then
+    git check-ref-format --branch "$target_arg" >/dev/null 2>&1 || die "'$target_arg' isn't a valid branch name."
+    ship_base=$target_arg
+fi
+if [ -n "$notes_file" ]; then
+    [ -f "$notes_file" ] || die "release notes file '$notes_file' doesn't exist."
+    notes_file=$(cd "$(dirname "$notes_file")" && pwd)/$(basename "$notes_file")
+fi
+
+# set_prod — a prod ship targets main or master. Set again after --resume
+# reads the target back from status.json.
+set_prod() {
+    case "$ship_base" in
+        main | master) prod=true ;;
+        *) prod=false ;;
+    esac
+}
+set_prod
 
 case "$mode" in
     status) ship_status_report "$ship_id"; exit ;;
@@ -124,6 +159,15 @@ resolve_config() {
         esac
         cfg_ship_stage=$migrated_stage
     fi
+    # A prod ship goes past open_pr only when this run asks for it: the
+    # configured stage is for feature ships.
+    prod_stage_default=false
+    if $prod; then
+        case "$(cfg_source ship_stage)" in
+            --set | env*) ;;
+            *) cfg_ship_stage=open_pr; prod_stage_default=true ;;
+        esac
+    fi
 }
 
 # cfg_source <key> — where <key>'s value came from.
@@ -133,6 +177,8 @@ cfg_source() {
     env_name=$(rc_env_name "$1")
     if [ -n "${!env_name+x}" ]; then
         echo "env $env_name"
+    elif [ "$1" = ship_stage ] && [ "${prod_stage_default:-false}" = true ]; then
+        echo "prod default"
     elif [ "$1" = ship_stage ] && [ -n "${migrated_stage:-}" ]; then
         echo ".codereviewrc (pr_automation)"
     elif grep -q "^$1=" .codereviewrc 2>/dev/null; then
@@ -147,14 +193,19 @@ cfg() {
     printf '%s' "${!name}"
 }
 
-# config_hash — a hash of every resolved setting. The plan prints it; kickoff
-# refuses if it no longer matches, so the approved config is the one that runs.
+# config_hash — a hash of every resolved setting, the target and the release
+# notes. The plan prints it; kickoff refuses if it no longer matches, so the
+# approved config and notes are the ones that run.
 config_hash() {
     local key
-    # shellcheck disable=SC2086 # word-splitting the key list is the point
-    for key in $rc_known_keys; do
-        printf '%s=%s\n' "$key" "$(cfg "$key")"
-    done | git hash-object --stdin | cut -c1-12
+    {
+        # shellcheck disable=SC2086 # word-splitting the key list is the point
+        for key in $rc_known_keys; do
+            printf '%s=%s\n' "$key" "$(cfg "$key")"
+        done
+        printf 'target=%s\n' "$ship_base"
+        [ -n "$notes_file" ] && printf 'notes=%s\n' "$(git hash-object "$notes_file")"
+    } | git hash-object --stdin | cut -c1-12
 }
 
 # config_json — every setting with its source, for status.json.
@@ -364,16 +415,16 @@ ship_owning() {
     done | tail -n 1
 }
 
-preflight() {
-    local t ahead origin_head d owner hook
-    branch=""
+# preflight_feature — the developer's branch is shippable into ship_base.
+preflight_feature() {
+    local ahead origin_head hook
     head_sha=$(git rev-parse HEAD 2>/dev/null)
     sha7=$(printf '%s' "$head_sha" | cut -c1-7)
 
     if ! branch=$(git symbolic-ref -q --short HEAD); then
         branch=""
         pf_fail "HEAD is detached. Check out the branch you want to ship, then /ship again."
-    elif [ "$branch" = "$ship_base" ] || [ "$branch" = main ]; then
+    elif in_list "$branch" "$ship_base $ship_dev main master"; then
         pf_fail "You're on $branch. /ship ships a feature branch into $ship_base: check one out first."
     fi
 
@@ -387,24 +438,86 @@ preflight() {
             pf_ok "$branch is $ahead commit(s) ahead of origin/$ship_base"
         fi
         origin_head=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)
-        [ "$origin_head" = "origin/$ship_base" ] \
-            || pf_warn "origin/HEAD is '${origin_head:-unset}', not origin/$ship_base. Make $ship_base the default: gh repo edit --default-branch $ship_base (or az repos update --repository <repo> --default-branch $ship_base), then git remote set-head origin $ship_base."
+        [ "$origin_head" = "origin/$ship_dev" ] \
+            || pf_warn "origin/HEAD is '${origin_head:-unset}', not origin/$ship_dev. Make $ship_dev the default: gh repo edit --default-branch $ship_dev (or az repos update --repository <repo> --default-branch $ship_dev), then git remote set-head origin $ship_dev."
     fi
 
     [ -n "$(git status --porcelain)" ] \
         && pf_warn "Uncommitted changes in your checkout aren't part of this ship. Only commits up to $sha7 ship."
 
-    for t in claude uv git; do
-        command -v "$t" >/dev/null 2>&1 || pf_fail "$t isn't on PATH. Install it, then /ship again."
-    done
     hook=$(git rev-parse --git-path hooks/pre-push)
     if [ -f "$hook" ]; then
         pf_ok "pre-push hook installed"
     else
         pf_fail "The pre-push hook isn't installed, so nothing would review the push. Run: uv run pre-commit install"
     fi
-
     snapshot="ship/$branch-$sha7"
+}
+
+# preflight_prod — origin/develop has something to release into ship_base.
+# Fetches both branches (remote refs only) so the plan freezes develop's
+# current tip, not a stale one.
+preflight_prod() {
+    local ahead behind
+    branch=$ship_dev
+    snapshot=""
+    head_sha=""
+    git fetch -q origin "$ship_dev" "$ship_base" 2>/dev/null \
+        || pf_warn "git fetch origin $ship_dev $ship_base failed; planning from the last-fetched refs."
+    if ! head_sha=$(git rev-parse -q --verify "refs/remotes/origin/$ship_dev"); then
+        head_sha=""
+        pf_fail "origin/$ship_dev doesn't exist, so there's nothing to release."
+    fi
+    sha7=$(printf '%s' "$head_sha" | cut -c1-7)
+    if ! git rev-parse -q --verify "refs/remotes/origin/$ship_base" >/dev/null; then
+        pf_fail "origin/$ship_base doesn't exist. Push it first (git push -u origin $ship_base)."
+    elif [ -n "$head_sha" ]; then
+        ahead=$(git rev-list --count "origin/$ship_base..$head_sha")
+        behind=$(git rev-list --count "$head_sha..origin/$ship_base")
+        if [ "$ahead" -eq 0 ]; then
+            pf_fail "origin/$ship_dev has no commits that $ship_base doesn't. Nothing to release."
+        else
+            pf_ok "origin/$ship_dev is $ahead commit(s) ahead of origin/$ship_base"
+        fi
+        [ "$behind" -eq 0 ] \
+            || pf_warn "origin/$ship_base has $behind commit(s) that $ship_dev doesn't (a hotfix?). Merge $ship_base into $ship_dev first, or the PR may conflict."
+    fi
+    case "$cfg_ship_stage" in
+        push) pf_fail "A prod ship opens a PR from $ship_dev; ship_stage=push has nothing to do. Use open_pr or merge." ;;
+        verify_deploy) pf_fail "verify_deploy checks the dev deploy only. A prod ship stops at merge; use open_pr or merge." ;;
+    esac
+    if stage_at_least merge && [ "$cfg_pr_merge_method" != merge ]; then
+        pf_warn "A prod ship merges with a merge commit and keeps $ship_dev; pr_merge_method=$cfg_pr_merge_method applies to feature ships only."
+    fi
+    if [ -n "$notes_file" ]; then
+        pf_ok "release notes: $notes_file"
+    else
+        pf_warn "No --notes-file: the PR description will be the generated commit list."
+    fi
+}
+
+# prod_pr_open — the URL of an open PR from ship_dev into ship_base, if any.
+prod_pr_open() {
+    case "$cfg_pr_host" in
+        gh) gh pr list --base "$ship_base" --head "$ship_dev" --state open --json url --jq '.[0].url // empty' 2>/dev/null ;;
+        az) az repos pr list --source-branch "$ship_dev" --target-branch "$ship_base" --status active \
+            --query '[0].pullRequestId' -o tsv 2>/dev/null ;;
+    esac
+}
+
+preflight() {
+    local t d owner open
+    branch=""
+    if $prod; then
+        preflight_prod
+    else
+        preflight_feature
+    fi
+
+    for t in claude uv git; do
+        command -v "$t" >/dev/null 2>&1 || pf_fail "$t isn't on PATH. Install it, then /ship again."
+    done
+
     for d in $(ship_dirs); do
         if ship_is_running "$d" \
             && [ "$(status_get "$d/status.json" source_branch)" = "$branch" ] \
@@ -413,7 +526,7 @@ preflight() {
         fi
     done
     leftover=""
-    if [ -n "$branch" ] && git rev-parse -q --verify "refs/heads/$snapshot" >/dev/null; then
+    if [ -n "$snapshot" ] && git rev-parse -q --verify "refs/heads/$snapshot" >/dev/null; then
         owner=$(ship_owning "$snapshot")
         if [ -z "$owner" ]; then
             pf_fail "Branch $snapshot already exists and no ship owns it. Delete it (git branch -D $snapshot), then /ship again."
@@ -430,10 +543,14 @@ preflight() {
     if stage_at_least open_pr; then
         preflight_host
     fi
+    if $prod && [ -z "$pf_fails" ]; then
+        open=$(prod_pr_open)
+        [ -z "$open" ] || pf_fail "A PR from $ship_dev into $ship_base is already open ($open). Merge or close it first."
+    fi
     if stage_at_least merge && [ -n "$cfg_pr_reviewers" ]; then
         pf_warn "pr_reviewers is set, but at ship_stage=$cfg_ship_stage the PR is approved and auto-completed right away, so reviewers may never see it. Use open_pr to wait for them."
     fi
-    if stage_at_least verify_deploy; then
+    if ! $prod && stage_at_least verify_deploy; then
         deploy_preflight
     fi
 }
@@ -460,10 +577,16 @@ fix_model fix_effort fix_max_iterations ship_fix_retries agent_timeout pr_poll_i
         && shown="$shown deploy_pipeline deploy_provider deploy_project deploy_region deploy_name
 deploy_match deploy_proxy deploy_smoke deploy_run_grace deploy_poll_timeout deploy_smoke_timeout"
     echo "Ship $ship_id"
-    printf '  %-24s %s\n' source "${branch:-(detached)} @ $sha7"
-    printf '  %-24s %s\n' snapshot "$snapshot"
-    printf '  %-24s %s\n' worktree "$worktree"
-    printf '  %-24s %s\n' target "$ship_base"
+    if $prod; then
+        printf '  %-24s %s\n' source "origin/$ship_dev @ $sha7"
+        printf '  %-24s %s\n' target "$ship_base (PROD release, PR titled 'prod 🚀')"
+        printf '  %-24s %s\n' notes "${notes_file:-(generated commit list)}"
+    else
+        printf '  %-24s %s\n' source "${branch:-(detached)} @ $sha7"
+        printf '  %-24s %s\n' snapshot "$snapshot"
+        printf '  %-24s %s\n' worktree "$worktree"
+        printf '  %-24s %s\n' target "$ship_base"
+    fi
     printf '  %-24s %s\n' log "$(ship_root)/$ship_id/ship.log"
     echo "Settings"
     # shellcheck disable=SC2086 # word-splitting the key lists is the point
@@ -495,7 +618,8 @@ plan() {
     preflight
     ship_id=${ship_id:-$(date +%Y%m%d-%H%M%S)-$sha7}
     repo_root=$(pwd -P)
-    worktree="$(dirname "$repo_root")/$(basename "$repo_root").ship-$ship_id"
+    worktree=""
+    $prod || worktree="$(dirname "$repo_root")/$(basename "$repo_root").ship-$ship_id"
     plan_hash=$(config_hash)
 }
 
@@ -607,19 +731,52 @@ pr_body() {
     fi
 }
 
+# prod_pr_body — the release notes the developer approved, or a generated
+# commit list (auto-fix commits left out) with the recorded decisions.
+prod_pr_body() {
+    local range="origin/$ship_base..$snapshot_sha" decisions
+    if [ -f "$ship_dir/release-notes.md" ]; then
+        cat "$ship_dir/release-notes.md"
+    else
+        echo "## Changes"
+        echo ""
+        git log --no-merges --reverse --format='- %s' "$range" | grep -vx -e '- Apply code review auto-fix'
+        decisions=$(bash "$script_dir/decisions.sh" --range "$range")
+        if [ -n "$decisions" ]; then
+            echo ""
+            echo "## Decisions"
+            echo ""
+            echo '```'
+            echo "$decisions"
+            echo '```'
+        fi
+    fi
+    echo ""
+    echo "---"
+    echo "Releases \`$ship_dev\` at $(printf '%s' "$snapshot_sha" | cut -c1-7) into \`$ship_base\`, opened by /ship ($ship_id)."
+}
+
 stage_open_pr() {
-    local body url id r
+    local body url id r head title
     local reviewers=() reviewer_args=()
     cur_stage=open_pr
-    ship_event "$ship_dir" open_pr running "opening a PR from $snapshot into $ship_base"
-    body=$(pr_body)
+    if $prod; then
+        head=$ship_dev
+        title="prod 🚀"
+        body=$(prod_pr_body)
+    else
+        head=$snapshot
+        title=$source_branch
+        body=$(pr_body)
+    fi
+    ship_event "$ship_dir" open_pr running "opening a PR from $head into $ship_base"
     while IFS= read -r r; do
         [ -n "$r" ] && reviewers+=("$r")
     done <<< "$(reviewer_list)"
     case "$cfg_pr_host" in
         gh)
             [ -n "$cfg_pr_reviewers" ] && reviewer_args=(--reviewer "$(reviewer_list | paste -sd, -)")
-            url=$(gh pr create --base "$ship_base" --head "$snapshot" --title "$source_branch" --body "$body" \
+            url=$(gh pr create --base "$ship_base" --head "$head" --title "$title" --body "$body" \
                 ${reviewer_args[@]+"${reviewer_args[@]}"}) \
                 || fail_stage open_pr "gh pr create failed; see $ship_dir/ship.log"
             id=${url##*/}
@@ -627,8 +784,8 @@ stage_open_pr() {
         az)
             # ADO reviewers are added as optional.
             [ -n "$cfg_pr_reviewers" ] && reviewer_args=(--reviewers "${reviewers[@]}")
-            id=$(az repos pr create --source-branch "$snapshot" --target-branch "$ship_base" \
-                --title "$source_branch" --description "$body" \
+            id=$(az repos pr create --source-branch "$head" --target-branch "$ship_base" \
+                --title "$title" --description "$body" \
                 ${reviewer_args[@]+"${reviewer_args[@]}"} \
                 --query pullRequestId -o tsv) \
                 || fail_stage open_pr "az repos pr create failed; see $ship_dir/ship.log"
@@ -641,22 +798,32 @@ stage_open_pr() {
     ship_event "$ship_dir" open_pr passed "PR $url${cfg_pr_reviewers:+ (reviewers: $cfg_pr_reviewers)}"
 }
 
-# pr_poll — one poll of the PR: sets pr_state (open | merged | closed),
-# merged_sha, and blocking.
+# prod_pr_moved <head-sha> — true, with pr_state=moved, when a prod PR's head
+# is no longer the planned develop commit: merging it would release commits
+# nobody planned. gh's --match-head-commit only checks when auto-merge is
+# armed, and ADO has no such guard.
+prod_pr_moved() {
+    $prod && [ -n "$1" ] && [ "$1" != "$snapshot_sha" ] || return 1
+    pr_state=moved
+}
+
+# pr_poll — one poll of the PR: sets pr_state (open | merged | closed |
+# moved), merged_sha, and blocking.
 pr_poll() {
-    local out state merge_state policies
+    local out state merge_state policies source_sha
     pr_state=open
     merged_sha=""
     blocking=""
     case "$cfg_pr_host" in
         gh)
-            out=$(gh pr view "$pr_url" --json state,mergeStateStatus,mergeCommit \
-                --jq '[.state, .mergeStateStatus, (.mergeCommit.oid // "")] | @tsv' 2>/dev/null) || return 1
-            IFS=$'\t' read -r state merge_state merged_sha <<< "$out"
+            out=$(gh pr view "$pr_url" --json state,mergeStateStatus,headRefOid,mergeCommit \
+                --jq '[.state, .mergeStateStatus, .headRefOid, (.mergeCommit.oid // "")] | @tsv' 2>/dev/null) || return 1
+            IFS=$'\t' read -r state merge_state source_sha merged_sha <<< "$out"
             case "$state" in
                 MERGED) pr_state=merged ;;
                 CLOSED) pr_state=closed ;;
                 *)
+                    prod_pr_moved "$source_sha" && return 0
                     case "$merge_state" in
                         DIRTY) blocking="merge conflicts with $ship_base" ;;
                         BEHIND) blocking="branch is behind $ship_base" ;;
@@ -671,13 +838,15 @@ pr_poll() {
             # Fields go newline-per-value or tab-separated depending on the az
             # version, so normalize; the nullable commit ID stays last.
             out=$(az repos pr show --id "$pr_id" \
-                --query "[status, mergeStatus, lastMergeCommit.commitId]" -o tsv 2>/dev/null | tr '\n' '\t') || return 1
-            IFS=$'\t' read -r state merge_state merged_sha <<< "$out"
+                --query "[status, mergeStatus, lastMergeSourceCommit.commitId, lastMergeCommit.commitId]" -o tsv 2>/dev/null | tr '\n' '\t') || return 1
+            IFS=$'\t' read -r state merge_state source_sha merged_sha <<< "$out"
             case "$state" in
                 completed) pr_state=merged ;;
                 abandoned) pr_state=closed ;;
                 *)
-                    if [ "$merge_state" = conflicts ]; then
+                    if prod_pr_moved "$source_sha"; then
+                        :
+                    elif [ "$merge_state" = conflicts ]; then
                         blocking="merge conflicts with $ship_base"
                     else
                         policies=$(az repos pr policy list --id "$pr_id" \
@@ -705,22 +874,38 @@ squash_body() {
 }
 
 stage_merge() {
-    local method_flag elapsed=0 last_blocking="" squash=true body=""
+    local method method_flag delete_source elapsed=0 last_blocking="" squash=true body=""
     local body_args=()
     cur_stage=merge
     pr_url=$(status_get "$ship_dir/status.json" pr_url)
     pr_id=$(status_get "$ship_dir/status.json" pr_id)
-    ship_event "$ship_dir" merge running "approving and arming auto-merge ($cfg_pr_merge_method, delete source branch)"
+    # A prod ship merges develop with a merge commit, so main and develop
+    # don't diverge, and never deletes develop. gh also pins the merge to the
+    # planned commit; pr_poll guards the same on ADO.
+    if $prod; then
+        method=merge
+        delete_source=false
+        ship_event "$ship_dir" merge running "approving and arming auto-merge (merge commit, keeps $ship_dev)"
+    else
+        method=$cfg_pr_merge_method
+        delete_source=true
+        ship_event "$ship_dir" merge running "approving and arming auto-merge ($method, delete source branch)"
+    fi
     case "$cfg_pr_host" in
         gh)
             if [ "$cfg_pr_self_approve" = true ]; then
                 gh pr review "$pr_url" --approve \
                     || echo "WARNING: self-approval was rejected (branch protection?); auto-merge waits for a human review instead."
             fi
-            method_flag="--$cfg_pr_merge_method"
-            [ "$cfg_pr_merge_method" = squash ] && body=$(squash_body)
+            method_flag="--$method"
+            [ "$method" = squash ] && body=$(squash_body)
             [ -n "$body" ] && body_args=(--body "$body")
-            gh pr merge "$pr_url" --auto "$method_flag" --delete-branch ${body_args[@]+"${body_args[@]}"} \
+            if $prod; then
+                body_args+=(--match-head-commit "$snapshot_sha")
+            else
+                body_args+=(--delete-branch)
+            fi
+            gh pr merge "$pr_url" --auto "$method_flag" ${body_args[@]+"${body_args[@]}"} \
                 || fail_stage merge "couldn't arm auto-merge on $pr_url; it's open, merge it manually"
             ;;
         az)
@@ -728,13 +913,13 @@ stage_merge() {
                 az repos pr set-vote --id "$pr_id" --vote approve >/dev/null \
                     || echo "WARNING: self-approval was rejected (branch policy?); auto-complete waits for a human review instead."
             fi
-            [ "$cfg_pr_merge_method" = squash ] || squash=false
+            [ "$method" = squash ] || squash=false
             $squash && body=$(squash_body)
             [ -n "$body" ] && body_args=(--merge-commit-message "Merged PR $pr_id: $source_branch
 
 $body")
             az repos pr update --id "$pr_id" --auto-complete true --squash "$squash" \
-                --delete-source-branch true ${body_args[@]+"${body_args[@]}"} >/dev/null \
+                --delete-source-branch "$delete_source" ${body_args[@]+"${body_args[@]}"} >/dev/null \
                 || fail_stage merge "couldn't arm auto-complete on PR $pr_id; it's open, complete it manually"
             ;;
     esac
@@ -745,6 +930,7 @@ $body")
             case "$pr_state" in
                 merged) break ;;
                 closed) fail_stage merge "$pr_url was closed without merging" ;;
+                moved) fail_stage merge "$ship_dev moved past the planned $(printf '%s' "$snapshot_sha" | cut -c1-7) while PR $pr_url waited, so it would release unplanned commits. Cancel auto-merge on the PR, then /ship $ship_base again" ;;
             esac
             if [ "$blocking" != "$last_blocking" ]; then
                 status_set "$ship_dir/status.json" blocking_reason "$blocking"
@@ -792,8 +978,16 @@ finish() {
         case "$cfg_ship_stage" in
             push) msg="$msg. Pushed $snapshot: open a PR from it into $ship_base yourself" ;;
             open_pr) msg="$msg. PR: $(status_get "$ship_dir/status.json" pr_url)" ;;
-            *) msg="$msg. If you're done with $source_branch: git branch -d $source_branch" ;;
+            *)
+                if $prod; then
+                    msg="$msg. Released $ship_dev into $ship_base"
+                else
+                    msg="$msg. If you're done with $source_branch: git branch -d $source_branch"
+                fi
+                ;;
         esac
+    elif $prod; then
+        msg="$msg. Log: $ship_dir/ship.log"
     else
         msg="$msg. Kept for inspection: worktree $worktree, branch $snapshot, log $ship_dir/ship.log"
     fi
@@ -824,11 +1018,15 @@ run_stages() {
     echo "$$" > "$ship_dir/pid"
     trap on_signal INT TERM
     trap on_exit EXIT
-    cd "$worktree" || die "worktree $worktree is gone."
+    # A prod ship has no worktree; its stages only call the PR host and read
+    # remote refs, so they run from the checkout without touching it.
+    cd "${worktree:-$repo_root}" || die "worktree $worktree is gone."
     resolve_config
     export REVIEW_BASE_BRANCH=$ship_base
-    stage_push
-    stage_at_least open_pr || finish passed "shipped to push"
+    if ! $prod; then
+        stage_push
+        stage_at_least open_pr || finish passed "shipped to push"
+    fi
     stage_open_pr
     stage_at_least merge || finish passed "shipped to open_pr"
     stage_merge
@@ -846,6 +1044,8 @@ load_ship() {
     snapshot_sha=$(status_get "$ship_dir/status.json" snapshot_sha)
     worktree=$(status_get "$ship_dir/status.json" worktree)
     repo_root=$(status_get "$ship_dir/status.json" repo_root)
+    ship_base=$(status_get "$ship_dir/status.json" target_branch)
+    set_prod
 }
 
 if [ "$mode" = resume ]; then
@@ -870,7 +1070,7 @@ plan
 if [ -n "$planned_id" ]; then
     # /ship planned already and the developer approved that plan.
     [ -z "$expect_sha" ] || [ "$expect_sha" = "$head_sha" ] \
-        || die "HEAD moved since the plan (planned ${expect_sha:0:7}, now $sha7). Run /ship again to plan this commit."
+        || die "$($prod && echo "origin/$ship_dev" || echo HEAD) moved since the plan (planned ${expect_sha:0:7}, now $sha7). Run /ship again to plan this commit."
     [ -z "$expect_config" ] || [ "$expect_config" = "$plan_hash" ] \
         || die "a setting resolves differently than in the plan (config $expect_config, now $plan_hash). Run /ship again to see the new config."
     [ ! -d "$(ship_root)/$ship_id" ] || die "ship $ship_id already exists. Run /ship again for a new plan."
@@ -899,22 +1099,27 @@ if [ -n "$leftover" ]; then
     ship_remove_leftovers "$leftover"
 fi
 
-git branch "$snapshot" "$head_sha" || die "couldn't create $snapshot."
-# Seeded from the source branch's entry, so commits already reviewed there
-# aren't reviewed again.
-prev=$(ledger_get "$branch")
-if [ -n "$prev" ]; then
-    ledger_set "$snapshot" "$prev" || rollback "couldn't seed the review ledger."
+if ! $prod; then
+    git branch "$snapshot" "$head_sha" || die "couldn't create $snapshot."
+    # Seeded from the source branch's entry, so commits already reviewed there
+    # aren't reviewed again.
+    prev=$(ledger_get "$branch")
+    if [ -n "$prev" ]; then
+        ledger_set "$snapshot" "$prev" || rollback "couldn't seed the review ledger."
+    fi
+    git worktree add -q "$worktree" "$snapshot" || rollback "git worktree add failed."
+    # .codereviewrc is gitignored, so the worktree doesn't have it.
+    [ -f .codereviewrc ] && cp .codereviewrc "$worktree/.codereviewrc"
+    mkdir -p "$worktree/working"
+    echo "Syncing dependencies in the worktree..."
+    (cd "$worktree" && uv sync -q) || rollback "uv sync failed in $worktree."
 fi
-git worktree add -q "$worktree" "$snapshot" || rollback "git worktree add failed."
-# .codereviewrc is gitignored, so the worktree doesn't have it.
-[ -f .codereviewrc ] && cp .codereviewrc "$worktree/.codereviewrc"
-mkdir -p "$worktree/working"
-echo "Syncing dependencies in the worktree..."
-(cd "$worktree" && uv sync -q) || rollback "uv sync failed in $worktree."
 
 ship_dir="$(ship_root)/$ship_id"
 mkdir -p "$ship_dir"
+# Copied so the approved notes are the ones the PR gets, whatever happens to
+# the file afterwards.
+[ -n "$notes_file" ] && cp "$notes_file" "$ship_dir/release-notes.md"
 status_init "$ship_dir/status.json" "$(config_json)"
 status_set "$ship_dir/status.json" id "$ship_id"
 status_set "$ship_dir/status.json" source_branch "$branch"
@@ -930,14 +1135,19 @@ print_block > "$ship_dir/ship.log"
 ln -sfn "$ship_id" "$(ship_root)/latest"
 source_branch=$branch
 snapshot_sha=$head_sha
-ship_event "$ship_dir" kickoff passed "snapshot $snapshot, worktree $worktree" >> "$ship_dir/ship.log"
+if $prod; then
+    kickoff_msg="releasing origin/$ship_dev at $sha7 into $ship_base"
+else
+    kickoff_msg="snapshot $snapshot, worktree $worktree"
+fi
+ship_event "$ship_dir" kickoff passed "$kickoff_msg" >> "$ship_dir/ship.log"
 
 if [ "$detach" = true ]; then
     # The worktree's copy is the snapshot's own and nobody edits it mid-run;
     # the checkout's copy is the fallback when ship.sh isn't committed.
-    runner="$worktree/scripts/ship.sh"
-    [ -f "$runner" ] || runner="$script_dir/ship.sh"
-    cd "$worktree" || die "worktree $worktree is gone."
+    runner="$script_dir/ship.sh"
+    [ -n "$worktree" ] && [ -f "$worktree/scripts/ship.sh" ] && runner="$worktree/scripts/ship.sh"
+    cd "${worktree:-$repo_root}" || die "worktree $worktree is gone."
     nohup bash "$runner" --resume "$ship_id" > /dev/null 2>&1 &
     echo $! > "$ship_dir/pid"
     echo "Ship $ship_id started in the background."

@@ -17,11 +17,11 @@ run-check: ## Confirm the agent still imports cleanly (also runs on git push)
 review: ## Run the two-pass agentic code review (also runs on git push)
 	bash scripts/code-review.sh
 
-ship: ## Review, push and ship the branch into develop from a worktree (STAGE= SET= DETACH=1 YES=1)
+ship: ## Review, push and ship the branch into develop from a worktree (BRANCH= STAGE= SET= NOTES= DETACH=1 YES=1)
 	@bash scripts/ship.sh $(ship_args) $(call ship_flag,DETACH,--detach) $(call ship_flag,YES,--yes) \
 		$(call ship_arg,ID,--id "$$ID") $(call ship_arg,SHA,--expect-sha "$$SHA") $(call ship_arg,CONFIG,--expect-config "$$CONFIG")
 
-ship-plan: ## Show the config make ship would use and check it; creates nothing (STAGE= SET=)
+ship-plan: ## Show the config make ship would use and check it; creates nothing (BRANCH= STAGE= SET= NOTES=)
 	@bash scripts/ship.sh --plan $(ship_args)
 
 ship-stage: ## Set how far make ship goes: STAGE=push|open_pr|merge|verify_deploy
@@ -45,4 +45,5 @@ auto-pr: ## Alias for make ship-stage STAGE=merge
 #   make ship SET='deploy_name=Sales Agent (dev);review_model=sonnet'
 ship_arg = $(if $(filter command line,$(origin $(1))),$(2))
 ship_flag = $(if $(filter command line,$(origin $(1))),$(if $(filter 1 true yes,$($(1))),$(2)))
-ship_args = $(call ship_arg,STAGE,--stage "$$STAGE") $(call ship_arg,SET,--sets "$$SET")
+ship_args = $(call ship_arg,BRANCH,--target "$$BRANCH") $(call ship_arg,NOTES,--notes-file "$$NOTES") \
+	$(call ship_arg,STAGE,--stage "$$STAGE") $(call ship_arg,SET,--sets "$$SET")

@@ -17,8 +17,8 @@ The new design moves all of it into a separate git worktree, so none of it touch
 ## Decisions already made
 
 - Isolation uses a git worktree, not a `/tmp` clone or an MCP server.
-- `/ship` only ever opens PRs into and merges into `develop`. It refuses `main`.
-- Deploy verification covers the dev environment only. Because ship never merges to `main`, it can't trigger a prod deploy.
+- A feature ship opens PRs into and merges into `develop`, or another branch named in the invocation. `main` and `master` are never feature-ship targets: naming one starts a prod release (see [Prod releases](#prod-releases)).
+- Deploy verification covers the dev environment only. A prod release stops at `merge` at most.
 - Each repo has one deploy target: one Cloud Run service or one Agent Runtime (formerly Agent Engine).
 - Self-approval is allowed on the target repos.
 - If a merge doesn't trigger a deploy run (because of pipeline path filters), there's nothing to verify, and the stage is recorded as skipped.
@@ -354,9 +354,20 @@ deploy_smoke=SMOKE_TEST_REQUIRE_LIVE=1 make test-e2e
 
 A merge that only changes files outside the dev pipeline's path filters (for example `docs/`) ends at `verify_deploy: skipped (no deploy triggered)`.
 
+## Prod releases
+
+`/ship main` (or `master`, or `make ship BRANCH=main`) releases `develop` into that branch.
+
+1. **Confirm.** The skill asks, in one call, whether this is a prod deploy that merges `develop` into the branch, and whether to self-approve and auto-merge. No to the first cancels. The second sets the stage: no is `open_pr` (the recommended answer), yes is `merge` with `pr_self_approve=true`. A prod release ignores `ship_stage` from `.codereviewrc`: with no `--stage` or `CR_SHIP_STAGE`, it resolves to `open_pr` and the plan tags it `prod default`. `push` and `verify_deploy` fail preflight.
+2. **Plan.** Preflight fetches `develop` and the target, then freezes `origin/develop`'s tip as `SHIP_SHA`. It fails if `develop` has nothing the target doesn't, or if a PR from `develop` into the target is already open. It warns if the target has commits `develop` lacks, such as a hotfix. It skips the feature-branch checks: the current checkout, the pre-push hook and uncommitted changes don't matter.
+3. **Release notes.** The skill drafts notes from `git log --no-merges origin/<target>..<SHIP_SHA>` and the recorded decisions, writes them to `working/release-notes.md`, and plans again with `--notes-file`. The notes' hash is part of `SHIP_CONFIG`, along with the target, so an edit after the plan makes kickoff refuse. Kickoff copies the file to `.git/ship/<id>/release-notes.md`. Without `--notes-file`, the description is the commit subjects (minus `Apply code review auto-fix`) and the decisions.
+4. **Run.** There's no snapshot branch, no worktree and no push. The stages run from the checkout and touch only the PR host and remote refs. The PR goes from `develop` into the target, titled `prod 🚀`, with the notes and a footer naming the commit. `merge` always uses a merge commit (`pr_merge_method` applies to feature ships only) and never deletes `develop`. On GitHub, `gh pr merge --match-head-commit` pins the merge to `SHIP_SHA`. On both hosts, each poll fails the ship if the PR's head is no longer `SHIP_SHA`, since merging would release commits nobody planned.
+
+GitHub doesn't let you approve your own PR, so with self-approve the merge still waits for any review that branch protection requires.
+
 ## Out of scope
 
-- Prod verification and merges into `main`.
+- Prod deploy verification.
 - Repos with more than one deploy target.
 - An MCP server interface. It could wrap `ship.sh` later if the agent's git and PR permissions need to be restricted.
 - Running ships somewhere other than the developer's machine.
