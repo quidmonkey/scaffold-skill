@@ -317,7 +317,7 @@ The existing keys stay: `pr_host`, `pr_merge_method`, `pr_self_approve`, `pr_pol
    - A hand-written Cloud Run deploy can instead use `--revision-suffix=$(git rev-parse --short=12 HEAD)`; `/ship` accepts either.
    - The answer sets `deploy_match` (`sha` or unset) in the generated `.codereviewrc`.
 
-2. **Prefilled deploy settings.** When the scaffold knows the target (agents-cli's `-d`), it fills in `deploy_provider`, `deploy_name` and `deploy_region` (from `agents-cli-manifest.yaml`). `deploy_pipeline`, `deploy_project` and `deploy_smoke` are left for the developer.
+2. **Prefilled deploy settings.** When the scaffold knows the target (agents-cli's `-d`, Full depth only, since Prototype has no pipeline), it fills in `deploy_provider`, `deploy_name` and `deploy_region` (from `agents-cli-manifest.yaml`). `deploy_pipeline`, `deploy_project` and `deploy_smoke` are left for the developer.
 
 3. **Setup prompt.** `make setup` asks for the stage, defaulting to `open_pr`, instead of the yes/no auto-PR prompt.
 

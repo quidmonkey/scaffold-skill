@@ -147,7 +147,7 @@ deploy_proxy=false
 # Smoke test command, run in the ship's worktree with DEPLOY_URL,
 # DEPLOY_RESOURCE and DEPLOY_SHA set. Its exit code decides the result, so it
 # must fail when it can't reach the target: set its require-live flag.
-# e.g. SMOKE_TEST_REQUIRE_LIVE=1 make test-e2e
+# e.g. uv run pytest tests/integration
 deploy_smoke=
 # Seconds to wait for the pipeline run to appear. None means the pipeline's
 # path filters excluded the change: the stage is skipped, the ship passes.

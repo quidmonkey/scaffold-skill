@@ -45,7 +45,7 @@ Every project gets the `/ship` pipeline, which opens PRs into and merges into `d
 Ask via `AskUserQuestion` (up to 3 questions, one call):
 - **Agent template** (`-a`): offer `adk` (ADK ReAct agent with A2A support, recommended default) and `adk-samples agent` (an `adk@<sample>` shortcut such as `adk@data-science`; ask for the sample name if the user picks it). "Other" takes any id agents-cli accepts: a local path (`local@/path`) or a remote Git URL. agents-cli 1.8 dropped agent-starter-pack's `langgraph` and `agentic_rag` templates, and `adk_a2a` is now an alias for `adk`. Don't offer `adk_go`, `adk_java`, `adk_ts` or the `empty_*` templates: this skill's tooling is Python-only, and `empty_py` generates no agent directory for `run-check` to import.
 - **Deployment target** (`-d`): `agent_runtime` (recommended default; agent-starter-pack called it `agent_engine`), `cloud_run`, `gke`, `none`.
-- **Scaffold depth**: `Prototype` (recommended for exploration — `--prototype`, no CI/CD or Terraform, fastest to iterate) or `Full` (CI/CD + Terraform via GitHub Actions — production-ready pipeline, more setup).
+- **Scaffold depth**: `Prototype` (recommended for exploration — `--prototype`, no CI/CD pipeline or its Terraform, fastest to iterate; agents-cli still generates single-project Terraform under `deployment/terraform/`) or `Full` (CI/CD + Terraform via GitHub Actions — production-ready pipeline, more setup).
 
 Skip the layout question entirely — agents-cli owns the directory layout.
 
@@ -202,6 +202,8 @@ Skip the `finops.md` and `infra.md` rows entirely for non-GCP projects.
 | `templates/docs/finops.md` | `docs/finops.md` | write — GCP is always true in agents-cli mode |
 | `templates/docs/infra.md` | `docs/infra.md` | write |
 
+After writing every file, check for leftover placeholders with `grep -rnE '(^|[^$])\{\{' --exclude-dir=.venv --exclude-dir=.git .`. The `(^|[^$])` skips GitHub Actions `${{ ... }}` expressions in agents-cli's workflows.
+
 `templates/agents-cli/Makefile`'s `run-check` target assumes `{{code-dir}}/agent.py` (e.g. `app/agent.py`) is the agent's entry point, matching agents-cli's layout for the `adk` template. If the chosen template places it elsewhere, fix the target before reporting done.
 
 ```bash
@@ -209,9 +211,9 @@ mkdir -p .claude/skills/ship docs/templates working scripts/lib
 chmod +x scripts/code-review.sh scripts/ship.sh scripts/set-ship-stage.sh scripts/docs-sync-check.sh scripts/precommit-check.sh scripts/decisions.sh scripts/decisions-hook.sh scripts/decisions-commit-msg.sh
 ```
 
-**Prefilled deploy settings (`{{agents-cli}}` with `cloud_run` or `agent_runtime`):** in the written `.codereviewrc`, set `deploy_provider=<deployment target>`, `deploy_region` to `region` from `agents-cli-manifest.yaml` (agents-cli's default is `us-east1`), and `deploy_name` to the Cloud Run service name or Agent Runtime display name. `agents-cli deploy` defaults that to the project name, so use `name` from the manifest unless a generated workflow passes `--service-name`. Set `deploy_match=sha` if `{{sha-tagging}}` is yes. Leave `deploy_pipeline`, `deploy_project` and `deploy_smoke` empty: the scaffold doesn't know them. Skip this for every other target and for the plain scaffold.
+**Prefilled deploy settings (`{{agents-cli}}`, Full depth, with `cloud_run` or `agent_runtime`):** in the written `.codereviewrc`, set `deploy_provider=<deployment target>`, `deploy_region` to `region` from `agents-cli-manifest.yaml` (agents-cli's default is `us-east1`), and `deploy_name` to the Cloud Run service name or Agent Runtime display name. `agents-cli deploy` defaults that to the project name, so use `name` from the manifest unless a generated workflow passes `--service-name`. Set `deploy_match=sha` if `{{sha-tagging}}` is yes. Leave `deploy_pipeline`, `deploy_project` and `deploy_smoke` empty: the scaffold doesn't know them. The generated pipeline has staging and prod but no dev environment, so `deploy_project` will be the staging project. Skip this for Prototype depth (no pipeline for `verify_deploy` to watch), for every other target, and for the plain scaffold.
 
-**Tag deploys with the commit SHA (`{{sha-tagging}}` yes):** the generated `.github/workflows/staging.yaml` and `deploy-to-prod.yaml` deploy with `uvx google-agents-cli@<version> deploy ...`. Add `--labels commit=${GITHUB_SHA::12}` to each of those `deploy` invocations, as one more continuation line. `--labels` sets a resource label on both an Agent Runtime and a Cloud Run revision (`agents-cli deploy` has no revision-suffix flag), and `/ship` checks for a `commit=<sha12>` label on either. Labels are additive, so redeploying the same commit works.
+**Tag deploys with the commit SHA (`{{sha-tagging}}` yes):** the generated `.github/workflows/staging.yaml` and `deploy-to-prod.yaml` deploy with `uvx google-agents-cli@<version> deploy ...`. In each of those `deploy` invocations, append ` \` to the current last line, then add `--labels commit=${GITHUB_SHA::12}` on its own line below it. Without the ` \` the flag runs as a separate command. `--labels` sets a resource label on both an Agent Runtime and a Cloud Run revision (`agents-cli deploy` has no revision-suffix flag), and `/ship` checks for a `commit=<sha12>` label on either. Labels are additive, so redeploying the same commit works.
 
 After editing, grep for `commit=` in the workflows to confirm the edit landed. If no `agents-cli deploy` invocation is there (a different template or agents-cli version), skip the edit, set `deploy_match` back to unset, and report that SHA tagging wasn't applied and why.
 
@@ -309,7 +311,7 @@ Always include:
 
 Include when it applies:
 
-- **Deploy verification** (agents-cli with `cloud_run` or `agent_runtime`): `deploy_provider`, `deploy_region` and `deploy_name` are prefilled in `.codereviewrc`; `deploy_pipeline`, `deploy_project` and `deploy_smoke` still need filling in before `/ship verify_deploy` works. Say whether SHA tagging was applied (and where), skipped because the expected deploy code wasn't found, declined, or not offered (Prototype depth). With Full depth, also say that the generated `staging.yaml` deploys on pushes to `main`, while `/ship` merges into `develop` and looks for the run there; add `develop` to the workflow's `on.push.branches` if `verify_deploy` should find it.
+- **Deploy verification** (agents-cli with `cloud_run` or `agent_runtime`): with Full depth, `deploy_provider`, `deploy_region` and `deploy_name` are prefilled in `.codereviewrc`; `deploy_pipeline`, `deploy_project` (the staging project) and `deploy_smoke` still need filling in before `/ship verify_deploy` works. With Prototype depth nothing is prefilled: `verify_deploy` needs a deploy pipeline, which Prototype doesn't generate. Say whether SHA tagging was applied (and where), skipped because the expected deploy code wasn't found, declined, or not offered (Prototype depth). With Full depth, also say that the generated `staging.yaml` deploys on pushes to `main`, while `/ship` merges into `develop` and looks for the run there; add `develop` to the workflow's `on.push.branches` if `verify_deploy` should find it.
 - **`make run-check`:** in agents-cli mode, whether the target still points at the right entry point after Step 4's check.
 
 End with one line pointing at `README.md` for the review settings, shipping, and decision history.

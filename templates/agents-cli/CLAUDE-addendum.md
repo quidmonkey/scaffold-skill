@@ -8,7 +8,7 @@ The sections above come from `agents-cli`; this section layers this repo's own r
 ## Toolchain additions
 
 Beyond the agents-cli stack (uv, ruff, ty, ADK eval), this repo also runs:
-- bandit — security scanner (pre-commit and pre-push)
+- bandit — security scanner (pre-commit)
 - pre-commit — git hooks, installed once via `uv run pre-commit install` at scaffold time
 
 The pre-push pytest hook runs `tests/unit` only, not `tests/integration` — the integration suite makes live Vertex AI calls and fails without real GCP credentials, which a push shouldn't require. `uv run pytest tests/unit tests/integration` is unaffected and still runs both.
